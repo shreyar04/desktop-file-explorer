@@ -1,0 +1,21 @@
+# Compiled bytecode
+out/
+bin/
+*.class
+
+# IDE & Editor files
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# OS generated files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Temporary logs & test artifacts
+*.log
+test_temp_sandbox/
