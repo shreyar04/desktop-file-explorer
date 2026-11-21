@@ -6,6 +6,8 @@ import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyAdapter;
@@ -16,17 +18,22 @@ import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import javax.swing.AbstractAction;
+import javax.swing.ActionMap;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.DefaultListModel;
 import javax.swing.Icon;
+import javax.swing.InputMap;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
+import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JList;
+import javax.swing.JMenu;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -37,6 +44,7 @@ import javax.swing.JSplitPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.JToolBar;
+import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
@@ -48,7 +56,7 @@ import javax.swing.table.JTableHeader;
 import javax.swing.table.TableColumn;
 
 /**
- * FileExplorerFrame: Main Graphical User Interface for Desktop File Explorer.
+ * FileExplorerFrame: Modern, full-featured Windows-style File Explorer GUI.
  *
  * Demonstrates Syllabus Concepts:
  * - Inheritance (extends JFrame)
@@ -56,8 +64,8 @@ import javax.swing.table.TableColumn;
  * - Event Handling and Adapter Classes (MouseAdapter, KeyAdapter)
  * - Layout Managers (BorderLayout, FlowLayout, BoxLayout)
  * - Swing Components (JFrame, JTable, JSplitPane, JToolBar, JPopupMenu, etc.)
- * - Inner Classes and Anonymous Classes
- * - Exception Handling with User Dialogs
+ * - Keyboard Shortcuts via InputMap and ActionMap
+ * - Robust Exception Handling with User Dialogs
  */
 public class FileExplorerFrame extends JFrame implements ActionListener {
 
@@ -70,6 +78,7 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
     private JButton btnForward;
     private JButton btnUp;
     private JButton btnRefresh;
+    private JLabel lblCurrentFolderIcon;
     private JTextField txtAddressBar;
     private JButton btnGo;
 
@@ -80,36 +89,54 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
 
     // Toolbar Buttons
     private JButton btnNewFolder;
-    private JButton btnRename;
-    private JButton btnCopy;
     private JButton btnCut;
+    private JButton btnCopy;
     private JButton btnPaste;
+    private JButton btnRename;
     private JButton btnDelete;
     private JButton btnProperties;
     private JComboBox<String> comboSort;
 
     // Main Content Components
     private JTable fileTable;
+    private JScrollPane tableScrollPane;
     private JList<SidebarItem> listQuickAccess;
     private JList<SidebarItem> listDrives;
 
-    // Context Menu
-    private JPopupMenu contextMenu;
-    private JMenuItem menuOpen;
-    private JMenuItem menuNewFolder;
-    private JMenuItem menuRename;
-    private JMenuItem menuCopy;
-    private JMenuItem menuCut;
-    private JMenuItem menuPaste;
-    private JMenuItem menuDelete;
-    private JMenuItem menuProperties;
+    // Guard flag to prevent recursive listener loops in sidebar
+    private boolean isUpdatingSidebarSelection = false;
+
+    // Context Menus
+    private JPopupMenu itemContextMenu;
+    private JPopupMenu backgroundContextMenu;
+    private JMenuItem itemMenuOpen;
+    private JMenuItem itemMenuCut;
+    private JMenuItem itemMenuCopy;
+    private JMenuItem itemMenuPaste;
+    private JMenuItem itemMenuRename;
+    private JMenuItem itemMenuDelete;
+    private JMenuItem itemMenuProperties;
+
+    private JMenuItem bgMenuRefresh;
+    private JMenuItem bgMenuNewFolder;
+    private JMenuItem bgMenuPaste;
+    private JMenuItem bgMenuProperties;
 
     // Status Bar Labels
     private JLabel lblStatusCount;
-    private JLabel lblStatusMessage;
+    private JLabel lblStatusClipboard;
+    private JLabel lblStatusSelection;
+
+    // Fonts & Colors
+    private static final Font FONT_REGULAR = new Font("Segoe UI", Font.PLAIN, 12);
+    private static final Font FONT_BOLD = new Font("Segoe UI", Font.BOLD, 12);
+    private static final Font FONT_HEADER = new Font("Segoe UI", Font.BOLD, 13);
+    private static final Color COLOR_ACCENT_BLUE = new Color(0, 102, 204);
+    private static final Color COLOR_BORDER = new Color(218, 222, 229);
+    private static final Color COLOR_SIDEBAR_BG = new Color(248, 249, 250);
 
     /**
-     * Constructor initializes the frame, managers, layouts, and components.
+     * Constructor initializes managers, layout, components, and event bindings.
      */
     public FileExplorerFrame() {
         super("Desktop File Explorer");
@@ -117,20 +144,23 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
         this.tableModel = new FileTableModel();
 
         initializeUI();
-        loadDirectory(fileManager.getCurrentDirectory());
+        setupKeyboardShortcuts();
+
+        // Initial navigation
+        navigateTo(fileManager.getCurrentDirectory());
     }
 
     /**
-     * Sets up the complete GUI structure, layouts, and event bindings.
+     * Constructs the primary GUI layout and window settings.
      */
     private void initializeUI() {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(1100, 700);
-        setMinimumSize(new Dimension(850, 500));
-        setLocationRelativeTo(null); // Center window on screen
+        setSize(1140, 720);
+        setMinimumSize(new Dimension(880, 520));
+        setLocationRelativeTo(null);
         setLayout(new BorderLayout());
 
-        // 1. Create Top Container (Navigation Bar + Toolbar)
+        // 1. Top Panel: Navigation Bar & Toolbar
         JPanel topContainer = new JPanel();
         topContainer.setLayout(new BoxLayout(topContainer, BoxLayout.Y_AXIS));
 
@@ -141,55 +171,49 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
         topContainer.add(toolBar);
         add(topContainer, BorderLayout.NORTH);
 
-        // 2. Create Center Split Pane (Sidebar + Main File Table)
+        // 2. Center Split Pane: Sidebar & File Table
         JPanel sidebarPanel = createSidebarPanel();
         JPanel tablePanel = createTablePanel();
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, sidebarPanel, tablePanel);
-        splitPane.setDividerLocation(220);
+        splitPane.setDividerLocation(230);
         splitPane.setContinuousLayout(true);
         splitPane.setDividerSize(6);
+        splitPane.setBorder(null);
         add(splitPane, BorderLayout.CENTER);
 
-        // 3. Create Bottom Status Bar
+        // 3. Bottom Status Bar
         JPanel statusBar = createStatusBar();
         add(statusBar, BorderLayout.SOUTH);
 
-        // 4. Create Right-Click Context Menu
-        createContextMenu();
+        // 4. Context Menus
+        createContextMenus();
     }
 
     /**
-     * Constructs the Top Navigation Bar containing Back, Forward, Up, Refresh,
-     * Address Bar, Go button, and Search Bar.
+     * Constructs the Top Navigation Bar containing navigation buttons,
+     * the Location Address Bar, and the Search Bar.
      */
     private JPanel createNavigationBar() {
-        JPanel navPanel = new JPanel(new BorderLayout(5, 5));
-        navPanel.setBorder(BorderFactory.createEmptyBorder(6, 8, 4, 8));
+        JPanel navPanel = new JPanel(new BorderLayout(6, 4));
+        navPanel.setBorder(BorderFactory.createEmptyBorder(6, 10, 4, 10));
 
-        // Left Navigation Controls Panel (FlowLayout)
+        // Left Navigation Controls Panel
         JPanel leftControls = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
 
-        btnBack = new JButton("\u2190"); // Left arrow
-        btnBack.setToolTipText("Back (Alt + Left)");
-        btnBack.setPreferredSize(new Dimension(38, 28));
+        btnBack = createIconButton("\u25C4", "Back (Alt + Left)");
         btnBack.setEnabled(false);
         btnBack.addActionListener(this);
 
-        btnForward = new JButton("\u2192"); // Right arrow
-        btnForward.setToolTipText("Forward (Alt + Right)");
-        btnForward.setPreferredSize(new Dimension(38, 28));
+        btnForward = createIconButton("\u25BA", "Forward (Alt + Right)");
         btnForward.setEnabled(false);
         btnForward.addActionListener(this);
 
-        btnUp = new JButton("\u2191 Up"); // Up arrow
-        btnUp.setToolTipText("Up to parent folder");
-        btnUp.setPreferredSize(new Dimension(60, 28));
+        btnUp = createIconButton("\u25B2 Up", "Up to parent folder (Alt + Up)");
+        btnUp.setPreferredSize(new Dimension(64, 28));
         btnUp.addActionListener(this);
 
-        btnRefresh = new JButton("\u21BB"); // Refresh symbol
-        btnRefresh.setToolTipText("Refresh (F5)");
-        btnRefresh.setPreferredSize(new Dimension(38, 28));
+        btnRefresh = createIconButton("\u27F3", "Refresh (F5)");
         btnRefresh.addActionListener(this);
 
         leftControls.add(btnBack);
@@ -199,11 +223,19 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
 
         // Center Address Bar Panel
         JPanel addressPanel = new JPanel(new BorderLayout(4, 0));
-        JLabel lblAddress = new JLabel(" Location: ");
-        lblAddress.setFont(lblAddress.getFont().deriveFont(Font.BOLD));
+        addressPanel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(COLOR_BORDER, 1),
+            BorderFactory.createEmptyBorder(2, 6, 2, 2)
+        ));
+        addressPanel.setBackground(Color.WHITE);
+
+        lblCurrentFolderIcon = new JLabel();
+        lblCurrentFolderIcon.setPreferredSize(new Dimension(20, 20));
 
         txtAddressBar = new JTextField();
-        txtAddressBar.setPreferredSize(new Dimension(300, 28));
+        txtAddressBar.setFont(FONT_REGULAR);
+        txtAddressBar.setBorder(null);
+        txtAddressBar.setBackground(Color.WHITE);
         txtAddressBar.addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
@@ -213,38 +245,49 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
             }
         });
 
-        btnGo = new JButton("Go");
-        btnGo.setPreferredSize(new Dimension(50, 28));
+        btnGo = new JButton("\u27A4"); // Arrow symbol
+        btnGo.setToolTipText("Go to entered path (Enter)");
+        btnGo.setPreferredSize(new Dimension(36, 24));
+        btnGo.setFocusPainted(false);
+        btnGo.setFont(FONT_REGULAR);
         btnGo.addActionListener(this);
 
-        addressPanel.add(lblAddress, BorderLayout.WEST);
+        addressPanel.add(lblCurrentFolderIcon, BorderLayout.WEST);
         addressPanel.add(txtAddressBar, BorderLayout.CENTER);
         addressPanel.add(btnGo, BorderLayout.EAST);
 
         // Right Search Panel
         JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+        JLabel lblFind = new JLabel("Search: ");
+        lblFind.setFont(FONT_REGULAR);
+
         txtSearch = new JTextField(12);
-        txtSearch.setPreferredSize(new Dimension(130, 28));
-        txtSearch.setToolTipText("Search files in current folder");
+        txtSearch.setFont(FONT_REGULAR);
+        txtSearch.setPreferredSize(new Dimension(140, 28));
+        txtSearch.setToolTipText("Search files by name (Ctrl + F)");
         txtSearch.addKeyListener(new KeyAdapter() {
             @Override
             public void keyPressed(KeyEvent e) {
                 if (e.getKeyCode() == KeyEvent.VK_ENTER) {
                     executeSearch();
+                } else if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
+                    clearSearch();
                 }
             }
         });
 
-        btnSearch = new JButton("Search");
-        btnSearch.setPreferredSize(new Dimension(72, 28));
+        btnSearch = new JButton("Find");
+        btnSearch.setFont(FONT_REGULAR);
+        btnSearch.setPreferredSize(new Dimension(58, 28));
         btnSearch.addActionListener(this);
 
-        btnClearSearch = new JButton("\u2715"); // Cross symbol
-        btnClearSearch.setToolTipText("Clear Search");
-        btnClearSearch.setPreferredSize(new Dimension(36, 28));
+        btnClearSearch = new JButton("\u2715");
+        btnClearSearch.setToolTipText("Clear Search (Esc)");
+        btnClearSearch.setPreferredSize(new Dimension(34, 28));
+        btnClearSearch.setFont(FONT_REGULAR);
         btnClearSearch.addActionListener(this);
 
-        searchPanel.add(new JLabel("Find:"));
+        searchPanel.add(lblFind);
         searchPanel.add(txtSearch);
         searchPanel.add(btnSearch);
         searchPanel.add(btnClearSearch);
@@ -257,53 +300,51 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
     }
 
     /**
-     * Constructs the Toolbar containing file operations:
-     * New Folder, Rename, Copy, Cut, Paste, Delete, Properties, and Sort.
+     * Constructs the Toolbar containing all primary file operations:
+     * New Folder, Cut, Copy, Paste, Rename, Delete, Properties, and Sort dropdown.
      */
     private JToolBar createToolBar() {
         JToolBar toolBar = new JToolBar();
         toolBar.setFloatable(false);
         toolBar.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createMatteBorder(1, 0, 1, 0, Color.LIGHT_GRAY),
-            BorderFactory.createEmptyBorder(3, 8, 3, 8)
+            BorderFactory.createMatteBorder(1, 0, 1, 0, COLOR_BORDER),
+            BorderFactory.createEmptyBorder(4, 10, 4, 10)
         ));
 
-        btnNewFolder = new JButton("New Folder");
-        btnNewFolder.setToolTipText("Create a new folder (Ctrl+Shift+N)");
-        btnNewFolder.addActionListener(this);
-
-        btnRename = new JButton("Rename");
-        btnRename.setToolTipText("Rename selected item");
-        btnRename.addActionListener(this);
-
-        btnCopy = new JButton("Copy");
-        btnCopy.setToolTipText("Copy selected item to clipboard");
-        btnCopy.addActionListener(this);
-
-        btnCut = new JButton("Move / Cut");
-        btnCut.setToolTipText("Cut selected item to move");
-        btnCut.addActionListener(this);
-
-        btnPaste = new JButton("Paste");
-        btnPaste.setToolTipText("Paste item from clipboard");
+        btnNewFolder = createToolBarButton("\uD83D\uDCC1+ New Folder", "Create new folder (Ctrl+Shift+N)");
+        btnCut = createToolBarButton("\u2702 Cut", "Cut selected item to move (Ctrl+X)");
+        btnCopy = createToolBarButton("\uD83D\uDCCB Copy", "Copy selected item to clipboard (Ctrl+C)");
+        btnPaste = createToolBarButton("\uD83D\uDCE5 Paste", "Paste item from clipboard (Ctrl+V)");
         btnPaste.setEnabled(false);
-        btnPaste.addActionListener(this);
+        btnRename = createToolBarButton("\u270F Rename", "Rename selected item (F2)");
+        btnDelete = createToolBarButton("\uD83D\uDDD1 Delete", "Delete selected item (Delete)");
+        btnProperties = createToolBarButton("\u2139 Properties", "View item properties (Alt+Enter)");
 
-        btnDelete = new JButton("Delete");
-        btnDelete.setToolTipText("Delete selected item");
-        btnDelete.addActionListener(this);
+        toolBar.add(btnNewFolder);
+        toolBar.add(Box.createHorizontalStrut(6));
+        toolBar.add(btnCut);
+        toolBar.add(Box.createHorizontalStrut(4));
+        toolBar.add(btnCopy);
+        toolBar.add(Box.createHorizontalStrut(4));
+        toolBar.add(btnPaste);
+        toolBar.add(Box.createHorizontalStrut(6));
+        toolBar.add(btnRename);
+        toolBar.add(Box.createHorizontalStrut(4));
+        toolBar.add(btnDelete);
+        toolBar.add(Box.createHorizontalStrut(6));
+        toolBar.add(btnProperties);
 
-        btnProperties = new JButton("Properties");
-        btnProperties.setToolTipText("View properties of selected item");
-        btnProperties.addActionListener(this);
+        // Right-aligned Sort dropdown
+        toolBar.add(Box.createHorizontalGlue());
+        JLabel lblSort = new JLabel("Sort by: ");
+        lblSort.setFont(FONT_REGULAR);
 
-        // Sort Selector
-        JLabel lblSort = new JLabel("  Sort by: ");
-        lblSort.setFont(lblSort.getFont().deriveFont(Font.PLAIN, 12f));
-
-        String[] sortOptions = {"Name (A-Z)", "Name (Z-A)", "Type", "Size", "Date Modified"};
+        String[] sortOptions = {
+            "Name (A-Z)", "Name (Z-A)", "Type", "Size", "Date Modified"
+        };
         comboSort = new JComboBox<>(sortOptions);
-        comboSort.setPreferredSize(new Dimension(130, 26));
+        comboSort.setFont(FONT_REGULAR);
+        comboSort.setPreferredSize(new Dimension(135, 26));
         comboSort.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -311,21 +352,6 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
             }
         });
 
-        toolBar.add(btnNewFolder);
-        toolBar.add(Box.createHorizontalStrut(4));
-        toolBar.add(btnRename);
-        toolBar.add(Box.createHorizontalStrut(4));
-        toolBar.add(btnCopy);
-        toolBar.add(Box.createHorizontalStrut(4));
-        toolBar.add(btnCut);
-        toolBar.add(Box.createHorizontalStrut(4));
-        toolBar.add(btnPaste);
-        toolBar.add(Box.createHorizontalStrut(4));
-        toolBar.add(btnDelete);
-        toolBar.add(Box.createHorizontalStrut(4));
-        toolBar.add(btnProperties);
-
-        toolBar.add(Box.createHorizontalGlue());
         toolBar.add(lblSort);
         toolBar.add(comboSort);
 
@@ -333,7 +359,32 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
     }
 
     /**
-     * Helper model class for the sidebar items (Quick Access and Drives).
+     * Helper to create consistently styled navigation buttons.
+     */
+    private JButton createIconButton(String text, String tooltip) {
+        JButton btn = new JButton(text);
+        btn.setToolTipText(tooltip);
+        btn.setPreferredSize(new Dimension(38, 28));
+        btn.setFont(FONT_REGULAR);
+        btn.setFocusPainted(false);
+        return btn;
+    }
+
+    /**
+     * Helper to create consistently styled toolbar buttons.
+     */
+    private JButton createToolBarButton(String text, String tooltip) {
+        JButton btn = new JButton(text);
+        btn.setToolTipText(tooltip);
+        btn.setFont(FONT_REGULAR);
+        btn.setFocusPainted(false);
+        btn.setMargin(new Insets(3, 8, 3, 8));
+        btn.addActionListener(this);
+        return btn;
+    }
+
+    /**
+     * Internal model class representing a sidebar location item.
      */
     private static class SidebarItem {
         final String displayName;
@@ -358,9 +409,13 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
     private JPanel createSidebarPanel() {
         JPanel sidebar = new JPanel();
         sidebar.setLayout(new BoxLayout(sidebar, BoxLayout.Y_AXIS));
-        sidebar.setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
+        sidebar.setBackground(COLOR_SIDEBAR_BG);
+        sidebar.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(0, 0, 0, 1, COLOR_BORDER),
+            BorderFactory.createEmptyBorder(8, 8, 8, 8)
+        ));
 
-        // Custom Cell Renderer for Sidebar Items showing native icons
+        // Custom Cell Renderer showing native icons with modern padding
         DefaultListCellRenderer sidebarRenderer = new DefaultListCellRenderer() {
             @Override
             public Component getListCellRendererComponent(JList<?> list, Object value, int index,
@@ -368,20 +423,20 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
                 JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
                 if (value instanceof SidebarItem) {
                     SidebarItem item = (SidebarItem) value;
-                    label.setText(item.displayName);
-                    if (item.icon != null) {
-                        label.setIcon(item.icon);
-                    }
-                    label.setBorder(BorderFactory.createEmptyBorder(3, 4, 3, 4));
+                    label.setText("  " + item.displayName);
+                    label.setIcon(item.icon);
+                    label.setFont(FONT_REGULAR);
+                    label.setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 6));
                 }
                 return label;
             }
         };
 
         // Section 1: Quick Access
-        JLabel lblQuickAccess = new JLabel(" Quick Access");
-        lblQuickAccess.setFont(lblQuickAccess.getFont().deriveFont(Font.BOLD, 12f));
+        JLabel lblQuickAccess = new JLabel("\u2B50 Quick Access");
+        lblQuickAccess.setFont(FONT_HEADER);
         lblQuickAccess.setAlignmentX(Component.LEFT_ALIGNMENT);
+        lblQuickAccess.setBorder(BorderFactory.createEmptyBorder(2, 4, 4, 4));
 
         DefaultListModel<SidebarItem> quickModel = new DefaultListModel<>();
         Map<String, File> quickLocations = fileManager.getQuickAccessLocations();
@@ -393,23 +448,41 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
         listQuickAccess = new JList<>(quickModel);
         listQuickAccess.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         listQuickAccess.setCellRenderer(sidebarRenderer);
+        listQuickAccess.setBackground(COLOR_SIDEBAR_BG);
         listQuickAccess.setAlignmentX(Component.LEFT_ALIGNMENT);
 
+        // Sidebar selection listener: Quick Access
         listQuickAccess.addListSelectionListener(new ListSelectionListener() {
             @Override
             public void valueChanged(ListSelectionEvent e) {
-                if (!e.getValueIsAdjusting() && listQuickAccess.getSelectedValue() != null) {
-                    listDrives.clearSelection();
+                if (!e.getValueIsAdjusting() && !isUpdatingSidebarSelection) {
                     SidebarItem selected = listQuickAccess.getSelectedValue();
-                    loadDirectory(selected.targetFolder);
+                    if (selected != null) {
+                        isUpdatingSidebarSelection = true;
+                        listDrives.clearSelection();
+                        isUpdatingSidebarSelection = false;
+                        navigateTo(selected.targetFolder);
+                    }
+                }
+            }
+        });
+
+        // Mouse click listener allows clicking already-selected item to re-navigate/refresh
+        listQuickAccess.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                SidebarItem selected = listQuickAccess.getSelectedValue();
+                if (selected != null) {
+                    navigateTo(selected.targetFolder);
                 }
             }
         });
 
         // Section 2: This PC / Drives
-        JLabel lblDrives = new JLabel(" This PC (Drives)");
-        lblDrives.setFont(lblDrives.getFont().deriveFont(Font.BOLD, 12f));
+        JLabel lblDrives = new JLabel("\uD83D\uDCBB This PC (Drives)");
+        lblDrives.setFont(FONT_HEADER);
         lblDrives.setAlignmentX(Component.LEFT_ALIGNMENT);
+        lblDrives.setBorder(BorderFactory.createEmptyBorder(12, 4, 4, 4));
 
         DefaultListModel<SidebarItem> drivesModel = new DefaultListModel<>();
         File[] drives = fileManager.getSystemDrives();
@@ -417,7 +490,7 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
             String name = drive.getAbsolutePath();
             try {
                 String desc = FileSystemView.getFileSystemView().getSystemDisplayName(drive);
-                if (desc != null && !desc.isEmpty()) {
+                if (desc != null && !desc.trim().isEmpty()) {
                     name = desc;
                 }
             } catch (Exception ignored) {}
@@ -428,27 +501,53 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
         listDrives = new JList<>(drivesModel);
         listDrives.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         listDrives.setCellRenderer(sidebarRenderer);
+        listDrives.setBackground(COLOR_SIDEBAR_BG);
         listDrives.setAlignmentX(Component.LEFT_ALIGNMENT);
 
+        // Sidebar selection listener: Drives (Fixes Issue 1: Drive Navigation Bug!)
         listDrives.addListSelectionListener(new ListSelectionListener() {
             @Override
             public void valueChanged(ListSelectionEvent e) {
-                if (!e.getValueIsAdjusting() && listDrives.getSelectedValue() != null) {
-                    listQuickAccess.clearSelection();
+                if (!e.getValueIsAdjusting() && !isUpdatingSidebarSelection) {
                     SidebarItem selected = listDrives.getSelectedValue();
-                    loadDirectory(selected.targetFolder);
+                    if (selected != null) {
+                        isUpdatingSidebarSelection = true;
+                        listQuickAccess.clearSelection();
+                        isUpdatingSidebarSelection = false;
+                        navigateTo(selected.targetFolder);
+                    }
                 }
             }
         });
 
-        // Assemble sidebar components
+        // Mouse click listener guarantees clicking drives always refreshes and navigates
+        listDrives.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                SidebarItem selected = listDrives.getSelectedValue();
+                if (selected != null) {
+                    navigateTo(selected.targetFolder);
+                }
+            }
+        });
+
+        JScrollPane scrollQuick = new JScrollPane(listQuickAccess);
+        scrollQuick.setBorder(null);
+        scrollQuick.setBackground(COLOR_SIDEBAR_BG);
+        scrollQuick.getViewport().setBackground(COLOR_SIDEBAR_BG);
+
+        JScrollPane scrollDrives = new JScrollPane(listDrives);
+        scrollDrives.setBorder(null);
+        scrollDrives.setBackground(COLOR_SIDEBAR_BG);
+        scrollDrives.getViewport().setBackground(COLOR_SIDEBAR_BG);
+
         sidebar.add(lblQuickAccess);
         sidebar.add(Box.createVerticalStrut(4));
-        sidebar.add(new JScrollPane(listQuickAccess));
+        sidebar.add(scrollQuick);
         sidebar.add(Box.createVerticalStrut(10));
         sidebar.add(lblDrives);
         sidebar.add(Box.createVerticalStrut(4));
-        sidebar.add(new JScrollPane(listDrives));
+        sidebar.add(scrollDrives);
 
         return sidebar;
     }
@@ -459,25 +558,44 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
     private JPanel createTablePanel() {
         JPanel panel = new JPanel(new BorderLayout());
 
-        fileTable = new JTable(tableModel);
-        fileTable.setRowHeight(26);
+        // Custom JTable displaying an empty folder placeholder when 0 rows
+        fileTable = new JTable(tableModel) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                if (getRowCount() == 0) {
+                    g.setColor(Color.GRAY);
+                    g.setFont(FONT_REGULAR);
+                    String emptyMsg = "This folder is empty.";
+                    int strWidth = g.getFontMetrics().stringWidth(emptyMsg);
+                    int x = Math.max(10, (getWidth() - strWidth) / 2);
+                    int y = Math.max(40, getHeight() / 2);
+                    g.drawString(emptyMsg, x, y);
+                }
+            }
+        };
+
+        fileTable.setFont(FONT_REGULAR);
+        fileTable.setRowHeight(28);
         fileTable.setShowGrid(false);
         fileTable.setIntercellSpacing(new Dimension(0, 2));
         fileTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         fileTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
+        fileTable.setFillsViewportHeight(true);
+        fileTable.setBackground(Color.WHITE);
 
         // Adjust column widths
         TableColumn colName = fileTable.getColumnModel().getColumn(0);
-        colName.setPreferredWidth(340);
+        colName.setPreferredWidth(360);
 
         TableColumn colType = fileTable.getColumnModel().getColumn(1);
         colType.setPreferredWidth(140);
 
         TableColumn colSize = fileTable.getColumnModel().getColumn(2);
-        colSize.setPreferredWidth(90);
+        colSize.setPreferredWidth(95);
 
         TableColumn colDate = fileTable.getColumnModel().getColumn(3);
-        colDate.setPreferredWidth(150);
+        colDate.setPreferredWidth(155);
 
         // Custom Cell Renderer for Column 0 (Name): shows system file/folder icon
         colName.setCellRenderer(new DefaultTableCellRenderer() {
@@ -488,14 +606,14 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
                 JLabel label = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
                 if (value instanceof File) {
                     File file = (File) value;
-                    label.setText(file.getName().isEmpty() ? file.getAbsolutePath() : file.getName());
+                    label.setText(" " + (file.getName().isEmpty() ? file.getAbsolutePath() : file.getName()));
                     try {
                         Icon icon = FileSystemView.getFileSystemView().getSystemIcon(file);
                         label.setIcon(icon);
                     } catch (Exception e) {
                         label.setIcon(null);
                     }
-                    label.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 4));
+                    label.setBorder(BorderFactory.createEmptyBorder(0, 6, 0, 6));
                 }
                 return label;
             }
@@ -506,7 +624,7 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
         rightRenderer.setHorizontalAlignment(SwingConstants.RIGHT);
         colSize.setCellRenderer(rightRenderer);
 
-        // Event Handling: Double click to open folder or launch file
+        // Double-click to open file/folder
         fileTable.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -530,18 +648,20 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
             }
         });
 
-        // Selection Listener to update status bar details
+        // Table selection listener updates status bar details
         fileTable.getSelectionModel().addListSelectionListener(new ListSelectionListener() {
             @Override
             public void valueChanged(ListSelectionEvent e) {
                 if (!e.getValueIsAdjusting()) {
-                    updateStatusForSelection();
+                    updateSelectedStatus();
                 }
             }
         });
 
         // Table Header Click Listener for Sorting
         JTableHeader header = fileTable.getTableHeader();
+        header.setFont(FONT_BOLD);
+        header.setPreferredSize(new Dimension(0, 28));
         header.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -552,49 +672,77 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
                         newAscending = !tableModel.isAscending();
                     }
                     tableModel.sort(col, newAscending);
-                    lblStatusMessage.setText("Sorted by " + tableModel.getColumnName(col) +
-                                            (newAscending ? " (Ascending)" : " (Descending)"));
+                    String arrow = newAscending ? " \u25B2" : " \u25BC";
+                    lblStatusSelection.setText("Sorted by " + tableModel.getColumnName(col) + arrow);
                 }
             }
         });
 
-        JScrollPane scrollPane = new JScrollPane(fileTable);
-        panel.add(scrollPane, BorderLayout.CENTER);
+        tableScrollPane = new JScrollPane(fileTable);
+        tableScrollPane.setBorder(null);
+        tableScrollPane.getViewport().setBackground(Color.WHITE);
 
+        // Right click listener on the scrollpane background (empty space)
+        tableScrollPane.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                handleBackgroundContextMenu(e);
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                handleBackgroundContextMenu(e);
+            }
+        });
+
+        panel.add(tableScrollPane, BorderLayout.CENTER);
         return panel;
     }
 
     /**
-     * Constructs the Bottom Status Bar showing item counts and operation messages.
+     * Constructs the Bottom Status Bar showing item counts, clipboard state, and selection.
      */
     private JPanel createStatusBar() {
-        JPanel statusBar = new JPanel(new BorderLayout(10, 0));
+        JPanel statusBar = new JPanel(new BorderLayout(15, 0));
         statusBar.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createMatteBorder(1, 0, 0, 0, Color.LIGHT_GRAY),
-            BorderFactory.createEmptyBorder(4, 10, 4, 10)
+            BorderFactory.createMatteBorder(1, 0, 0, 0, COLOR_BORDER),
+            BorderFactory.createEmptyBorder(4, 12, 4, 12)
         ));
 
         lblStatusCount = new JLabel("Loading items...");
-        lblStatusCount.setFont(lblStatusCount.getFont().deriveFont(Font.PLAIN, 12f));
+        lblStatusCount.setFont(FONT_REGULAR);
 
-        lblStatusMessage = new JLabel("Ready");
-        lblStatusMessage.setFont(lblStatusMessage.getFont().deriveFont(Font.PLAIN, 12f));
-        lblStatusMessage.setForeground(new Color(0, 102, 204));
+        lblStatusClipboard = new JLabel("");
+        lblStatusClipboard.setFont(FONT_REGULAR);
+        lblStatusClipboard.setForeground(new Color(150, 80, 0)); // Warm amber for clipboard notice
+
+        lblStatusSelection = new JLabel("Ready");
+        lblStatusSelection.setFont(FONT_REGULAR);
+        lblStatusSelection.setForeground(COLOR_ACCENT_BLUE);
+
+        JPanel rightStatusPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 0));
+        rightStatusPanel.setOpaque(false);
+        rightStatusPanel.add(lblStatusClipboard);
+        rightStatusPanel.add(lblStatusSelection);
 
         statusBar.add(lblStatusCount, BorderLayout.WEST);
-        statusBar.add(lblStatusMessage, BorderLayout.EAST);
+        statusBar.add(rightStatusPanel, BorderLayout.EAST);
 
         return statusBar;
     }
 
     /**
-     * Constructs the Right-Click Context Menu for the file table.
+     * Constructs both Right-Click Context Menus:
+     * 1. Item Context Menu (when clicking a file or folder row)
+     * 2. Background Context Menu (when clicking empty space)
      */
-    private void createContextMenu() {
-        contextMenu = new JPopupMenu();
+    private void createContextMenus() {
+        // --- 1. Item Context Menu ---
+        itemContextMenu = new JPopupMenu();
 
-        menuOpen = new JMenuItem("Open");
-        menuOpen.addActionListener(new ActionListener() {
+        itemMenuOpen = new JMenuItem("Open");
+        itemMenuOpen.setFont(FONT_BOLD);
+        itemMenuOpen.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
                 File selected = getSelectedFile();
@@ -604,99 +752,346 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
             }
         });
 
-        menuNewFolder = new JMenuItem("New Folder");
-        menuNewFolder.addActionListener(this);
+        itemMenuCut = new JMenuItem("Cut / Move");
+        itemMenuCut.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_X, ActionEvent.CTRL_MASK));
+        itemMenuCut.addActionListener(this);
 
-        menuRename = new JMenuItem("Rename");
-        menuRename.addActionListener(this);
+        itemMenuCopy = new JMenuItem("Copy");
+        itemMenuCopy.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_C, ActionEvent.CTRL_MASK));
+        itemMenuCopy.addActionListener(this);
 
-        menuCopy = new JMenuItem("Copy");
-        menuCopy.addActionListener(this);
+        itemMenuPaste = new JMenuItem("Paste");
+        itemMenuPaste.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_V, ActionEvent.CTRL_MASK));
+        itemMenuPaste.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                File selected = getSelectedFile();
+                // If a folder row was right-clicked, paste inside that folder!
+                if (selected != null && selected.isDirectory()) {
+                    handlePaste(selected);
+                } else {
+                    handlePaste(fileManager.getCurrentDirectory());
+                }
+            }
+        });
 
-        menuCut = new JMenuItem("Cut / Move");
-        menuCut.addActionListener(this);
+        itemMenuRename = new JMenuItem("Rename");
+        itemMenuRename.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F2, 0));
+        itemMenuRename.addActionListener(this);
 
-        menuPaste = new JMenuItem("Paste");
-        menuPaste.addActionListener(this);
+        itemMenuDelete = new JMenuItem("Delete");
+        itemMenuDelete.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, 0));
+        itemMenuDelete.addActionListener(this);
 
-        menuDelete = new JMenuItem("Delete");
-        menuDelete.addActionListener(this);
+        itemMenuProperties = new JMenuItem("Properties");
+        itemMenuProperties.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, ActionEvent.ALT_MASK));
+        itemMenuProperties.addActionListener(this);
 
-        menuProperties = new JMenuItem("Properties");
-        menuProperties.addActionListener(this);
+        itemContextMenu.add(itemMenuOpen);
+        itemContextMenu.add(new JSeparator());
+        itemContextMenu.add(itemMenuCut);
+        itemContextMenu.add(itemMenuCopy);
+        itemContextMenu.add(itemMenuPaste);
+        itemContextMenu.add(new JSeparator());
+        itemContextMenu.add(itemMenuRename);
+        itemContextMenu.add(itemMenuDelete);
+        itemContextMenu.add(new JSeparator());
+        itemContextMenu.add(itemMenuProperties);
 
-        contextMenu.add(menuOpen);
-        contextMenu.add(new JSeparator());
-        contextMenu.add(menuNewFolder);
-        contextMenu.add(menuRename);
-        contextMenu.add(new JSeparator());
-        contextMenu.add(menuCopy);
-        contextMenu.add(menuCut);
-        contextMenu.add(menuPaste);
-        contextMenu.add(new JSeparator());
-        contextMenu.add(menuDelete);
-        contextMenu.add(new JSeparator());
-        contextMenu.add(menuProperties);
+        // --- 2. Background Context Menu ---
+        backgroundContextMenu = new JPopupMenu();
+
+        bgMenuRefresh = new JMenuItem("Refresh");
+        bgMenuRefresh.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0));
+        bgMenuRefresh.addActionListener(this);
+
+        bgMenuNewFolder = new JMenuItem("New Folder");
+        bgMenuNewFolder.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_N, ActionEvent.CTRL_MASK | ActionEvent.SHIFT_MASK));
+        bgMenuNewFolder.addActionListener(this);
+
+        bgMenuPaste = new JMenuItem("Paste");
+        bgMenuPaste.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_V, ActionEvent.CTRL_MASK));
+        bgMenuPaste.addActionListener(this);
+
+        // Sort By submenu
+        JMenu menuSortBy = new JMenu("Sort by");
+        String[] sorts = {"Name (A-Z)", "Name (Z-A)", "Type", "Size", "Date Modified"};
+        for (int i = 0; i < sorts.length; i++) {
+            final int sortIndex = i;
+            JMenuItem sortItem = new JMenuItem(sorts[i]);
+            sortItem.addActionListener(new ActionListener() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    comboSort.setSelectedIndex(sortIndex);
+                }
+            });
+            menuSortBy.add(sortItem);
+        }
+
+        bgMenuProperties = new JMenuItem("Properties");
+        bgMenuProperties.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                // Show properties of current directory
+                FileProperties.showDialog(FileExplorerFrame.this, fileManager.getCurrentDirectory());
+            }
+        });
+
+        backgroundContextMenu.add(bgMenuRefresh);
+        backgroundContextMenu.add(new JSeparator());
+        backgroundContextMenu.add(bgMenuNewFolder);
+        backgroundContextMenu.add(bgMenuPaste);
+        backgroundContextMenu.add(new JSeparator());
+        backgroundContextMenu.add(menuSortBy);
+        backgroundContextMenu.add(new JSeparator());
+        backgroundContextMenu.add(bgMenuProperties);
     }
 
     /**
-     * Triggers context menu on right click and selects clicked row if unselected.
+     * Handles right-click popup trigger on the table.
      */
     private void handleContextMenuTrigger(MouseEvent e) {
         if (e.isPopupTrigger()) {
             int row = fileTable.rowAtPoint(e.getPoint());
-            if (row != -1 && !fileTable.isRowSelected(row)) {
-                fileTable.setRowSelectionInterval(row, row);
+            if (row != -1) {
+                if (!fileTable.isRowSelected(row)) {
+                    fileTable.setRowSelectionInterval(row, row);
+                }
+                File selected = getSelectedFile();
+                boolean isFolder = (selected != null && selected.isDirectory());
+
+                itemMenuOpen.setEnabled(selected != null);
+                itemMenuCut.setEnabled(selected != null);
+                itemMenuCopy.setEnabled(selected != null);
+                itemMenuRename.setEnabled(selected != null);
+                itemMenuDelete.setEnabled(selected != null);
+                itemMenuProperties.setEnabled(selected != null);
+
+                // If folder selected, paste can paste into folder; otherwise paste into current dir
+                itemMenuPaste.setEnabled(fileManager.canPaste());
+                if (isFolder && fileManager.canPaste()) {
+                    itemMenuPaste.setText("Paste into '" + selected.getName() + "'");
+                } else {
+                    itemMenuPaste.setText("Paste");
+                }
+
+                itemContextMenu.show(e.getComponent(), e.getX(), e.getY());
+            } else {
+                // Clicked on empty space inside table
+                handleBackgroundContextMenu(e);
             }
-
-            boolean hasSelection = fileTable.getSelectedRow() != -1;
-            menuOpen.setEnabled(hasSelection);
-            menuRename.setEnabled(hasSelection);
-            menuCopy.setEnabled(hasSelection);
-            menuCut.setEnabled(hasSelection);
-            menuDelete.setEnabled(hasSelection);
-            menuProperties.setEnabled(hasSelection);
-            menuPaste.setEnabled(fileManager.canPaste());
-
-            contextMenu.show(e.getComponent(), e.getX(), e.getY());
         }
     }
 
     /**
-     * Loads and displays the files for a specified directory.
-     *
-     * @param directory Target directory
+     * Handles right-click popup trigger on empty space/background.
      */
-    public void loadDirectory(File directory) {
-        if (directory == null || !directory.exists() || !directory.isDirectory()) {
+    private void handleBackgroundContextMenu(MouseEvent e) {
+        if (e.isPopupTrigger()) {
+            fileTable.clearSelection();
+            bgMenuPaste.setEnabled(fileManager.canPaste());
+            backgroundContextMenu.show(e.getComponent(), e.getX(), e.getY());
+        }
+    }
+
+    /**
+     * Registers global keyboard shortcuts for the entire window:
+     * Enter, Backspace, Delete, F2, F5, Ctrl+C, Ctrl+X, Ctrl+V, Ctrl+Shift+N, Ctrl+F, Alt+Enter.
+     */
+    private void setupKeyboardShortcuts() {
+        InputMap inputMap = getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap actionMap = getRootPane().getActionMap();
+
+        // 1. Enter: Open selected item (when table focused)
+        fileTable.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "tableOpen");
+        fileTable.getActionMap().put("tableOpen", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                File selected = getSelectedFile();
+                if (selected != null) {
+                    handleOpen(selected);
+                }
+            }
+        });
+
+        // 2. F5: Refresh
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0), "refreshAction");
+        actionMap.put("refreshAction", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                refreshCurrentView();
+            }
+        });
+
+        // 3. F2: Rename
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_F2, 0), "renameAction");
+        actionMap.put("renameAction", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                handleRename();
+            }
+        });
+
+        // 4. Delete: Delete
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, 0), "deleteAction");
+        actionMap.put("deleteAction", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                handleDelete();
+            }
+        });
+
+        // 5. Ctrl + C: Copy
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_C, ActionEvent.CTRL_MASK), "copyAction");
+        actionMap.put("copyAction", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                handleCopy();
+            }
+        });
+
+        // 6. Ctrl + X: Cut
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_X, ActionEvent.CTRL_MASK), "cutAction");
+        actionMap.put("cutAction", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                handleCut();
+            }
+        });
+
+        // 7. Ctrl + V: Paste
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_V, ActionEvent.CTRL_MASK), "pasteAction");
+        actionMap.put("pasteAction", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                handlePaste(fileManager.getCurrentDirectory());
+            }
+        });
+
+        // 8. Ctrl + Shift + N: New Folder
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_N, ActionEvent.CTRL_MASK | ActionEvent.SHIFT_MASK), "newFolderAction");
+        actionMap.put("newFolderAction", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                handleNewFolder();
+            }
+        });
+
+        // 9. Ctrl + F: Focus Search Bar
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_F, ActionEvent.CTRL_MASK), "searchFocusAction");
+        actionMap.put("searchFocusAction", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                txtSearch.requestFocusInWindow();
+                txtSearch.selectAll();
+            }
+        });
+
+        // 10. Alt + Enter: Properties
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, ActionEvent.ALT_MASK), "propertiesAction");
+        actionMap.put("propertiesAction", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                handleProperties();
+            }
+        });
+
+        // 11. Alt + Left / Backspace: Back in History
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT, ActionEvent.ALT_MASK), "backAction");
+        actionMap.put("backAction", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (fileManager.goBack()) {
+                    refreshCurrentView();
+                }
+            }
+        });
+
+        // 12. Alt + Right: Forward in History
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, ActionEvent.ALT_MASK), "forwardAction");
+        actionMap.put("forwardAction", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (fileManager.goForward()) {
+                    refreshCurrentView();
+                }
+            }
+        });
+
+        // 13. Alt + Up: Parent Directory
+        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_UP, ActionEvent.ALT_MASK), "upAction");
+        actionMap.put("upAction", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                if (fileManager.goUp()) {
+                    refreshCurrentView();
+                }
+            }
+        });
+    }
+
+    /**
+     * Primary Navigation Method:
+     * Validates target directory, updates FileManager state, and refreshes the view.
+     * Fixes Bug 1 (Drive and Folder Navigation).
+     *
+     * @param directory Target Directory to navigate into
+     */
+    public void navigateTo(File directory) {
+        if (directory == null) {
+            return;
+        }
+
+        if (!directory.exists() || !directory.isDirectory()) {
             JOptionPane.showMessageDialog(this,
-                "Cannot access directory: " + (directory != null ? directory.getAbsolutePath() : "null"),
+                "Cannot access directory: " + directory.getAbsolutePath() +
+                "\nAccess is denied or the location does not exist.",
                 "Access Error", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
-        // Update address bar
-        txtAddressBar.setText(directory.getAbsolutePath());
-
-        // Fetch files from FileManager
-        List<File> files = fileManager.getFiles();
-        tableModel.setFiles(files);
-
-        // Update navigation button states
-        btnBack.setEnabled(fileManager.canGoBack());
-        btnForward.setEnabled(fileManager.canGoForward());
-        btnUp.setEnabled(directory.getParentFile() != null);
-        btnPaste.setEnabled(fileManager.canPaste());
-
-        // Update status counts
-        int[] counts = FileUtils.countItems(directory);
-        lblStatusCount.setText(String.format("Total: %d items  (%d folders, %d files)",
-            counts[0] + counts[1], counts[0], counts[1]));
-        lblStatusMessage.setText("Ready");
+        boolean success = fileManager.navigateTo(directory);
+        if (success) {
+            refreshCurrentView();
+        }
     }
 
     /**
-     * Navigates to a path typed into the address bar.
+     * Refreshes the table, address bar, buttons, and status bar from the current directory.
+     */
+    public void refreshCurrentView() {
+        File current = fileManager.getCurrentDirectory();
+        if (current == null || !current.exists()) {
+            return;
+        }
+
+        // Update Address Bar and Folder Icon
+        txtAddressBar.setText(current.getAbsolutePath());
+        try {
+            lblCurrentFolderIcon.setIcon(FileSystemView.getFileSystemView().getSystemIcon(current));
+        } catch (Exception ignored) {}
+
+        // Load files into Table Model
+        List<File> files = fileManager.getFiles();
+        tableModel.setFiles(files);
+
+        // Update Navigation Buttons
+        btnBack.setEnabled(fileManager.canGoBack());
+        btnForward.setEnabled(fileManager.canGoForward());
+        btnUp.setEnabled(current.getParentFile() != null);
+        btnPaste.setEnabled(fileManager.canPaste());
+
+        // Update Status Counts
+        int[] counts = FileUtils.countItems(current);
+        lblStatusCount.setText(String.format(" %d items  (%d folders, %d files)",
+            counts[0] + counts[1], counts[0], counts[1]));
+
+        updateClipboardStatus();
+        updateSelectedStatus();
+    }
+
+    /**
+     * Navigates to a path string entered into the address bar.
      */
     private void navigateToAddress(String path) {
         if (path == null || path.trim().isEmpty()) {
@@ -704,8 +1099,7 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
         }
         File target = new File(path.trim());
         if (target.exists() && target.isDirectory()) {
-            fileManager.navigateTo(target);
-            loadDirectory(target);
+            navigateTo(target);
         } else {
             JOptionPane.showMessageDialog(this,
                 "The specified path does not exist or is not a directory:\n" + path,
@@ -714,9 +1108,7 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
     }
 
     /**
-     * Retrieves the currently selected File from the JTable.
-     *
-     * @return Selected File or null if no selection
+     * Returns the currently selected File from the table.
      */
     private File getSelectedFile() {
         int selectedRow = fileTable.getSelectedRow();
@@ -727,7 +1119,7 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
     }
 
     /**
-     * Handles opening a file or navigating into a directory.
+     * Handles opening a file or folder.
      */
     private void handleOpen(File file) {
         if (file == null || !file.exists()) {
@@ -735,10 +1127,9 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
         }
         try {
             if (file.isDirectory()) {
-                fileManager.navigateTo(file);
-                loadDirectory(file);
+                navigateTo(file);
             } else {
-                lblStatusMessage.setText("Opening file: " + file.getName());
+                lblStatusSelection.setText("Opening file: " + file.getName());
                 fileManager.open(file);
             }
         } catch (IOException ex) {
@@ -749,68 +1140,71 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
     }
 
     /**
-     * Updates status bar when table row selection changes.
+     * Updates status bar when table selection changes.
      */
-    private void updateStatusForSelection() {
+    private void updateSelectedStatus() {
         File selected = getSelectedFile();
         if (selected != null) {
             String sizeStr = selected.isDirectory() ? "Folder" : FileUtils.formatSize(selected.length());
-            lblStatusMessage.setText("Selected: " + selected.getName() + " (" + sizeStr + ")");
+            lblStatusSelection.setText("Selected: " + selected.getName() + " (" + sizeStr + ")");
         } else {
-            lblStatusMessage.setText("Ready");
+            lblStatusSelection.setText("Ready");
         }
     }
 
     /**
-     * Applies sorting based on the toolbar combo box selection.
+     * Updates the status bar clipboard indicator.
+     */
+    private void updateClipboardStatus() {
+        if (fileManager.canPaste()) {
+            lblStatusClipboard.setText("\uD83D\uDCCB Clipboard: " + fileManager.getClipboardDescription());
+            btnPaste.setEnabled(true);
+        } else {
+            lblStatusClipboard.setText("");
+            btnPaste.setEnabled(false);
+        }
+    }
+
+    /**
+     * Applies sorting from the toolbar combo box.
      */
     private void applySortingFromCombo() {
         int index = comboSort.getSelectedIndex();
         switch (index) {
-            case 0: // Name (A-Z)
-                tableModel.sort(0, true);
-                break;
-            case 1: // Name (Z-A)
-                tableModel.sort(0, false);
-                break;
-            case 2: // Type
-                tableModel.sort(1, true);
-                break;
-            case 3: // Size
-                tableModel.sort(2, true);
-                break;
-            case 4: // Date Modified
-                tableModel.sort(3, false);
-                break;
+            case 0: tableModel.sort(0, true); break;  // Name A-Z
+            case 1: tableModel.sort(0, false); break; // Name Z-A
+            case 2: tableModel.sort(1, true); break;  // Type
+            case 3: tableModel.sort(2, true); break;  // Size
+            case 4: tableModel.sort(3, false); break; // Date Modified
         }
     }
 
     /**
-     * Executes file search based on query entered in search box.
+     * Executes file search.
      */
     private void executeSearch() {
         String query = txtSearch.getText().trim();
         if (query.isEmpty()) {
-            loadDirectory(fileManager.getCurrentDirectory());
+            refreshCurrentView();
             return;
         }
 
-        lblStatusMessage.setText("Searching for '" + query + "'...");
+        lblStatusSelection.setText("Searching for '" + query + "'...");
         List<File> results = fileManager.search(query);
         tableModel.setFiles(results);
-        lblStatusCount.setText(String.format("Search Results: %d item(s) found", results.size()));
+        lblStatusCount.setText(String.format(" Search Results: %d item(s) found", results.size()));
     }
 
     /**
-     * Clears current search and restores the folder view.
+     * Clears active search.
      */
     private void clearSearch() {
         txtSearch.setText("");
-        loadDirectory(fileManager.getCurrentDirectory());
+        refreshCurrentView();
     }
 
     // ==========================================
-    // Core Feature Implementations (Mandatory 10)
+    // File Operations Handlers
     // ==========================================
 
     /**
@@ -823,13 +1217,13 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
             JOptionPane.PLAIN_MESSAGE);
 
         if (folderName == null || folderName.trim().isEmpty()) {
-            return; // User cancelled
+            return;
         }
 
         try {
             File created = fileManager.createFolder(folderName);
-            loadDirectory(fileManager.getCurrentDirectory());
-            lblStatusMessage.setText("Created folder: " + created.getName());
+            refreshCurrentView();
+            lblStatusSelection.setText("Created folder: " + created.getName());
         } catch (IOException ex) {
             JOptionPane.showMessageDialog(this,
                 "Error creating folder: " + ex.getMessage(),
@@ -855,13 +1249,13 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
             currentName);
 
         if (newName == null || newName.trim().isEmpty() || newName.trim().equals(currentName)) {
-            return; // Cancelled or unchanged
+            return;
         }
 
         try {
             File renamed = fileManager.rename(selected, newName);
-            loadDirectory(fileManager.getCurrentDirectory());
-            lblStatusMessage.setText("Renamed to: " + renamed.getName());
+            refreshCurrentView();
+            lblStatusSelection.setText("Renamed to: " + renamed.getName());
         } catch (IOException ex) {
             JOptionPane.showMessageDialog(this,
                 "Error renaming: " + ex.getMessage(),
@@ -882,8 +1276,8 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
         }
 
         fileManager.copy(selected);
-        btnPaste.setEnabled(true);
-        lblStatusMessage.setText("Copied '" + selected.getName() + "' to clipboard.");
+        updateClipboardStatus();
+        lblStatusSelection.setText("Copied '" + selected.getName() + "' to clipboard.");
     }
 
     /**
@@ -899,23 +1293,30 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
         }
 
         fileManager.cut(selected);
-        btnPaste.setEnabled(true);
-        lblStatusMessage.setText("Cut '" + selected.getName() + "' to clipboard (ready to move).");
+        updateClipboardStatus();
+        lblStatusSelection.setText("Cut '" + selected.getName() + "' (ready to paste).");
     }
 
     /**
-     * Paste helper for Copy and Move operations
+     * Paste into specified target directory (supports cross-folder and cross-drive).
      */
-    private void handlePaste() {
+    private void handlePaste(File targetDir) {
         if (!fileManager.canPaste()) {
+            JOptionPane.showMessageDialog(this,
+                "Clipboard is empty or file no longer exists.",
+                "Paste", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
 
+        if (targetDir == null || !targetDir.isDirectory()) {
+            targetDir = fileManager.getCurrentDirectory();
+        }
+
         try {
-            File pasted = fileManager.paste(fileManager.getCurrentDirectory());
-            loadDirectory(fileManager.getCurrentDirectory());
-            btnPaste.setEnabled(fileManager.canPaste());
-            lblStatusMessage.setText("Pasted item: " + pasted.getName());
+            File pasted = fileManager.paste(targetDir);
+            refreshCurrentView();
+            updateClipboardStatus();
+            lblStatusSelection.setText("Pasted item: " + pasted.getName());
         } catch (IOException ex) {
             JOptionPane.showMessageDialog(this,
                 "Error pasting item: " + ex.getMessage(),
@@ -945,8 +1346,8 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
         if (confirm == JOptionPane.YES_OPTION) {
             try {
                 fileManager.delete(selected);
-                loadDirectory(fileManager.getCurrentDirectory());
-                lblStatusMessage.setText("Deleted: " + selected.getName());
+                refreshCurrentView();
+                lblStatusSelection.setText("Deleted: " + selected.getName());
             } catch (IOException ex) {
                 JOptionPane.showMessageDialog(this,
                     "Error deleting item: " + ex.getMessage(),
@@ -961,10 +1362,8 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
     private void handleProperties() {
         File selected = getSelectedFile();
         if (selected == null) {
-            // If no item selected, show properties of current directory
             selected = fileManager.getCurrentDirectory();
         }
-
         FileProperties.showDialog(this, selected);
     }
 
@@ -978,38 +1377,38 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
 
         if (source == btnBack) {
             if (fileManager.goBack()) {
-                loadDirectory(fileManager.getCurrentDirectory());
+                refreshCurrentView();
             }
         } else if (source == btnForward) {
             if (fileManager.goForward()) {
-                loadDirectory(fileManager.getCurrentDirectory());
+                refreshCurrentView();
             }
         } else if (source == btnUp) {
             if (fileManager.goUp()) {
-                loadDirectory(fileManager.getCurrentDirectory());
+                refreshCurrentView();
             }
-        } else if (source == btnRefresh) {
-            loadDirectory(fileManager.getCurrentDirectory());
-            lblStatusMessage.setText("Refreshed.");
+        } else if (source == btnRefresh || source == bgMenuRefresh) {
+            refreshCurrentView();
+            lblStatusSelection.setText("Refreshed.");
         } else if (source == btnGo) {
             navigateToAddress(txtAddressBar.getText());
         } else if (source == btnSearch) {
             executeSearch();
         } else if (source == btnClearSearch) {
             clearSearch();
-        } else if (source == btnNewFolder || source == menuNewFolder) {
+        } else if (source == btnNewFolder || source == bgMenuNewFolder) {
             handleNewFolder();
-        } else if (source == btnRename || source == menuRename) {
+        } else if (source == btnRename || source == itemMenuRename) {
             handleRename();
-        } else if (source == btnCopy || source == menuCopy) {
+        } else if (source == btnCopy || source == itemMenuCopy) {
             handleCopy();
-        } else if (source == btnCut || source == menuCut) {
+        } else if (source == btnCut || source == itemMenuCut) {
             handleCut();
-        } else if (source == btnPaste || source == menuPaste) {
-            handlePaste();
-        } else if (source == btnDelete || source == menuDelete) {
+        } else if (source == btnPaste || source == bgMenuPaste) {
+            handlePaste(fileManager.getCurrentDirectory());
+        } else if (source == btnDelete || source == itemMenuDelete) {
             handleDelete();
-        } else if (source == btnProperties || source == menuProperties) {
+        } else if (source == btnProperties || source == itemMenuProperties) {
             handleProperties();
         }
     }

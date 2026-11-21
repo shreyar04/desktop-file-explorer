@@ -78,9 +78,10 @@ DesktopFileExplorer/
   - **Top Navigation Bar:** Back, Forward, Up, Refresh, Location Address Bar, and Search Bar.
   - **Toolbar:** New Folder, Rename, Copy, Move/Cut, Paste, Delete, Properties, and Sort dropdown.
   - **Center Split Pane:** Left sidebar (`JList` for Quick Access and Drives) and right main view (`JTable` with custom icon renderers).
-  - **Bottom Status Bar:** Live item counters and status feedback.
-  - **Context Menu:** Right-click popup menu on table rows.
-- Coordinates event handling (`MouseAdapter`, `KeyAdapter`, `ActionListener`).
+  - **Bottom Status Bar:** Live item counters, clipboard status, and selected item details.
+  - **Context Menus:** Right-click context menus for items (Open, Cut, Copy, Paste into folder, Rename, Delete, Properties) and empty table background (Refresh, New Folder, Paste, Sort by, Properties).
+  - **Keyboard Shortcuts:** Global key bindings (`Ctrl+C`, `Ctrl+X`, `Ctrl+V`, `Ctrl+Shift+N`, `F2`, `F5`, `Delete`, `Alt+Enter`, `Alt+Left/Right/Up`, `Ctrl+F`).
+- Coordinates event handling (`MouseAdapter`, `KeyAdapter`, `ActionListener`, `ActionMap`).
 
 ### `FileManager.java`
 - Manages business state: current directory, history stacks (`backHistory`, `forwardHistory`), and clipboard (`clipboardFile`, `clipboardMode`).

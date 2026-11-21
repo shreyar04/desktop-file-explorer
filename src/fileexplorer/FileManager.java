@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.Stack;
 
 /**
- * FileManager: Core business logic controller for the Desktop File Explorer.
+ * FileManager: Core business logic controller for Desktop File Explorer.
  * Manages file system navigation, navigation history stacks, internal clipboard,
  * and executes file operations (create, rename, copy, move, delete, open, search).
  *
@@ -48,7 +48,7 @@ public class FileManager {
 
     /**
      * Constructor initializes the FileManager with a default directory.
-     * Starts at the user's home directory.
+     * Starts at the user's home directory or the first available drive.
      */
     public FileManager() {
         this.backHistory = new Stack<>();
@@ -56,7 +56,6 @@ public class FileManager {
         this.clipboardFile = null;
         this.clipboardMode = null;
 
-        // Default start directory: User Home directory
         String userHome = System.getProperty("user.home");
         File initialDir = new File(userHome);
         if (!initialDir.exists() || !initialDir.isDirectory()) {
@@ -77,10 +76,10 @@ public class FileManager {
             return false;
         }
 
-        // Avoid adding to back stack if navigating to the same directory
+        // Avoid pushing redundant duplicate entries to back history stack
         if (currentDirectory != null && !currentDirectory.equals(targetDirectory)) {
             backHistory.push(currentDirectory);
-            forwardHistory.clear(); // Clear forward history on new navigation path
+            forwardHistory.clear(); // Clear forward history on new navigation branch
         }
 
         this.currentDirectory = targetDirectory;
@@ -137,7 +136,7 @@ public class FileManager {
     public boolean goUp() {
         if (currentDirectory != null) {
             File parent = currentDirectory.getParentFile();
-            if (parent != null && parent.exists()) {
+            if (parent != null && parent.exists() && parent.isDirectory()) {
                 return navigateTo(parent);
             }
         }
@@ -153,16 +152,20 @@ public class FileManager {
 
     /**
      * Retrieves all files and folders in the current directory.
-     * Handles restricted directories gracefully.
+     * Safely catches SecurityException on restricted/system folders.
      *
      * @return List of File objects
      */
     public List<File> getFiles() {
         List<File> result = new ArrayList<>();
         if (currentDirectory != null && currentDirectory.exists()) {
-            File[] list = currentDirectory.listFiles();
-            if (list != null) {
-                result.addAll(Arrays.asList(list));
+            try {
+                File[] list = currentDirectory.listFiles();
+                if (list != null) {
+                    result.addAll(Arrays.asList(list));
+                }
+            } catch (SecurityException se) {
+                System.err.println("Security warning: Permission denied to list contents of " + currentDirectory.getAbsolutePath());
             }
         }
         return result;
@@ -179,7 +182,7 @@ public class FileManager {
     }
 
     /**
-     * Retrieves standard Quick Access locations (Home, Desktop, Documents, Downloads).
+     * Retrieves standard Quick Access locations (Home, Desktop, Documents, Downloads, Pictures).
      * Demonstrates Collections Framework (Map, LinkedHashMap).
      *
      * @return Ordered Map of location names and corresponding File objects
@@ -193,14 +196,20 @@ public class FileManager {
         File desktop = new File(homeFile, "Desktop");
         if (desktop.exists()) locations.put("Desktop", desktop);
 
-        File documents = new File(homeFile, "Documents");
-        if (documents.exists()) locations.put("Documents", documents);
-
         File downloads = new File(homeFile, "Downloads");
         if (downloads.exists()) locations.put("Downloads", downloads);
 
+        File documents = new File(homeFile, "Documents");
+        if (documents.exists()) locations.put("Documents", documents);
+
         File pictures = new File(homeFile, "Pictures");
         if (pictures.exists()) locations.put("Pictures", pictures);
+
+        File music = new File(homeFile, "Music");
+        if (music.exists()) locations.put("Music", music);
+
+        File videos = new File(homeFile, "Videos");
+        if (videos.exists()) locations.put("Videos", videos);
 
         return locations;
     }
@@ -293,7 +302,27 @@ public class FileManager {
     }
 
     /**
+     * Clears the current clipboard content.
+     */
+    public void clearClipboard() {
+        this.clipboardFile = null;
+        this.clipboardMode = null;
+    }
+
+    /**
+     * Returns a human-friendly description of the clipboard status.
+     */
+    public String getClipboardDescription() {
+        if (!canPaste()) {
+            return "";
+        }
+        String modeStr = (clipboardMode == ClipboardMode.COPY) ? "COPY" : "CUT";
+        return "[" + modeStr + "] " + clipboardFile.getName();
+    }
+
+    /**
      * Executes the paste operation into the target directory.
+     * Supports cross-folder and cross-drive copy and move operations.
      * Automatically handles duplicate names and recursive folder copies.
      *
      * @param targetDirectory Destination directory
@@ -302,7 +331,10 @@ public class FileManager {
      */
     public File paste(File targetDirectory) throws IOException {
         if (!canPaste()) {
-            throw new IOException("Clipboard is empty or source file no longer exists.");
+            throw new IOException("Clipboard is empty or the source file no longer exists.");
+        }
+        if (targetDirectory == null || !targetDirectory.isDirectory()) {
+            targetDirectory = currentDirectory;
         }
         if (targetDirectory == null || !targetDirectory.isDirectory()) {
             throw new IOException("Target is not a valid directory.");
@@ -312,9 +344,16 @@ public class FileManager {
         if (clipboardFile.isDirectory()) {
             String sourcePath = clipboardFile.getAbsolutePath().toLowerCase();
             String targetPath = targetDirectory.getAbsolutePath().toLowerCase();
-            if (targetPath.startsWith(sourcePath)) {
-                throw new IOException("Cannot copy/move a directory into itself or its subfolder.");
+            if (targetPath.equals(sourcePath) || targetPath.startsWith(sourcePath + File.separator)) {
+                throw new IOException("Cannot copy or move a folder into itself or its subfolder.");
             }
+        }
+
+        // Cut & paste into the exact same folder is a harmless no-op
+        if (clipboardMode == ClipboardMode.CUT && targetDirectory.equals(clipboardFile.getParentFile())) {
+            File original = clipboardFile;
+            clearClipboard();
+            return original;
         }
 
         File destination = FileUtils.getUniqueDestinationFile(targetDirectory, clipboardFile.getName());
@@ -322,16 +361,18 @@ public class FileManager {
         if (clipboardMode == ClipboardMode.COPY) {
             FileUtils.copyRecursively(clipboardFile, destination);
         } else if (clipboardMode == ClipboardMode.CUT) {
-            // Attempt fast rename first (works within same drive)
+            // Attempt fast atomic rename first (works within same drive)
             boolean moved = clipboardFile.renameTo(destination);
             if (!moved) {
-                // Across drives or locked: copy recursively then delete source
+                // Cross-drive partition move: copy recursively then delete source
                 FileUtils.copyRecursively(clipboardFile, destination);
-                FileUtils.deleteRecursively(clipboardFile);
+                boolean deleted = FileUtils.deleteRecursively(clipboardFile);
+                if (!deleted) {
+                    System.err.println("Notice: Could not delete all source files during cut/move.");
+                }
             }
-            // Clear clipboard after cut/paste completes
-            this.clipboardFile = null;
-            this.clipboardMode = null;
+            // Clear clipboard after cut/move finishes
+            clearClipboard();
         }
 
         return destination;
@@ -351,7 +392,7 @@ public class FileManager {
 
         boolean success = FileUtils.deleteRecursively(file);
         if (!success) {
-            throw new IOException("Could not delete '" + file.getName() + "'. It may be read-only or currently open.");
+            throw new IOException("Could not delete '" + file.getName() + "'. It may be read-only or currently open in another program.");
         }
         return true;
     }
@@ -441,15 +482,17 @@ public class FileManager {
         if (dir == null || currentDepth > maxDepth) {
             return;
         }
-        File[] items = dir.listFiles();
-        if (items == null) {
-            return;
-        }
-        for (File item : items) {
-            collector.add(item);
-            if (item.isDirectory()) {
-                collectAllFiles(item, collector, currentDepth + 1, maxDepth);
+        try {
+            File[] items = dir.listFiles();
+            if (items == null) {
+                return;
             }
-        }
+            for (File item : items) {
+                collector.add(item);
+                if (item.isDirectory()) {
+                    collectAllFiles(item, collector, currentDepth + 1, maxDepth);
+                }
+            }
+        } catch (SecurityException ignored) {}
     }
 }

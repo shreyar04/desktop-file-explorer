@@ -282,6 +282,8 @@ public class FileUtils {
                     outStream.write(buffer, 0, length);
                 }
             }
+            // Preserve last modified timestamp
+            destination.setLastModified(source.lastModified());
         }
     }
 
@@ -308,6 +310,8 @@ public class FileUtils {
                 }
             }
         }
+        // Ensure writable on Windows before deleting (handles read-only files)
+        fileOrDir.setWritable(true);
         return fileOrDir.delete();
     }
 
