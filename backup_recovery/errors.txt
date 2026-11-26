@@ -1,0 +1,87 @@
+backup_recovery\decompiled_src\fileexplorer\FileExplorerFrame.java:218: error: incompatible types: FileExplorerFrame cannot be converted to LayoutManager
+        JPanel jPanel = new JPanel(this, new FlowLayout(0, 6, 4)){
+                                   ^
+backup_recovery\decompiled_src\fileexplorer\FileExplorerFrame.java:221: error: cannot find symbol
+                this.this$0 = fileExplorerFrame;
+                              ^
+  symbol: variable fileExplorerFrame
+backup_recovery\decompiled_src\fileexplorer\FileExplorerFrame.java:222: error: cannot find symbol
+                super(layoutManager);
+                      ^
+  symbol: variable layoutManager
+backup_recovery\decompiled_src\fileexplorer\FileExplorerFrame.java:222: error: explicit constructor invocation may only appear within a constructor body
+                super(layoutManager);
+                     ^
+backup_recovery\decompiled_src\fileexplorer\FileExplorerFrame.java:218: error: cannot find symbol
+        JPanel jPanel = new JPanel(this, new FlowLayout(0, 6, 4)){
+                        ^
+  symbol: constructor (FileExplorerFrame,FlowLayout)
+backup_recovery\decompiled_src\fileexplorer\FileExplorerFrame.java:260: error: cannot find symbol
+                this.this$0 = fileExplorerFrame;
+                              ^
+  symbol: variable fileExplorerFrame
+backup_recovery\decompiled_src\fileexplorer\FileExplorerFrame.java:274: error: constructor MouseAdapter in class MouseAdapter cannot be applied to given types;
+        jPanel.addMouseListener(new MouseAdapter(this){
+                                ^
+  required: no arguments
+  found:    FileExplorerFrame
+  reason: actual and formal argument lists differ in length
+backup_recovery\decompiled_src\fileexplorer\FileExplorerFrame.java:277: error: cannot find symbol
+                this.this$0 = fileExplorerFrame;
+                              ^
+  symbol: variable fileExplorerFrame
+backup_recovery\decompiled_src\fileexplorer\FileExplorerFrame.java:507: error: constructor MouseAdapter in class MouseAdapter cannot be applied to given types;
+        jButton.addMouseListener(new MouseAdapter(this){
+                                 ^
+  required: no arguments
+  found:    FileExplorerFrame
+  reason: actual and formal argument lists differ in length
+backup_recovery\decompiled_src\fileexplorer\FileExplorerFrame.java:531: error: constructor MouseAdapter in class MouseAdapter cannot be applied to given types;
+        jButton.addMouseListener(new MouseAdapter(this){
+                                 ^
+  required: no arguments
+  found:    FileExplorerFrame
+  reason: actual and formal argument lists differ in length
+backup_recovery\decompiled_src\fileexplorer\FileExplorerFrame.java:558: error: constructor MouseAdapter in class MouseAdapter cannot be applied to given types;
+        jButton.addMouseListener(new MouseAdapter(this){
+                                 ^
+  required: no arguments
+  found:    FileExplorerFrame
+  reason: actual and formal argument lists differ in length
+backup_recovery\decompiled_src\fileexplorer\FileExplorerFrame.java:592: error: incompatible types: Iterator<Entry<String,File>> cannot be converted to File[]
+        File[] fileArray = map.entrySet().iterator();
+                                                  ^
+backup_recovery\decompiled_src\fileexplorer\FileExplorerFrame.java:593: error: cannot find symbol
+        while (fileArray.hasNext()) {
+                        ^
+  symbol:   method hasNext()
+  location: variable fileArray of type File[]
+backup_recovery\decompiled_src\fileexplorer\FileExplorerFrame.java:594: error: cannot find symbol
+            Map.Entry<String, File> object2 = fileArray.next();
+                                                       ^
+  symbol:   method next()
+  location: variable fileArray of type File[]
+backup_recovery\decompiled_src\fileexplorer\FileExplorerFrame.java:802: error: constructor MouseAdapter in class MouseAdapter cannot be applied to given types;
+        jTableHeader.addMouseListener(new MouseAdapter(this){
+                                      ^
+  required: no arguments
+  found:    FileExplorerFrame
+  reason: actual and formal argument lists differ in length
+backup_recovery\decompiled_src\fileexplorer\FileExplorerFrame.java:805: error: cannot find symbol
+                this.this$0 = fileExplorerFrame;
+                              ^
+  symbol: variable fileExplorerFrame
+backup_recovery\decompiled_src\fileexplorer\FileExplorerFrame.java:947: error: cannot find symbol
+                    this.this$0 = fileExplorerFrame;
+                                  ^
+  symbol: variable fileExplorerFrame
+backup_recovery\decompiled_src\fileexplorer\FileManager.java:230: error: incompatible types: Object cannot be converted to File
+            return object;
+                   ^
+backup_recovery\decompiled_src\fileexplorer\FileManager.java:246: error: incompatible types: Object cannot be converted to File
+        return object;
+               ^
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+Note: Some messages have been simplified; recompile with -Xdiags:verbose to get full output
+19 errors
