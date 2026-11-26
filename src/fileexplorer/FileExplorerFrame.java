@@ -18,18 +18,15 @@ import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import javax.swing.AbstractAction;
-import javax.swing.ActionMap;
+import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.DefaultListModel;
 import javax.swing.Icon;
-import javax.swing.InputMap;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
-import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JList;
@@ -60,12 +57,14 @@ import javax.swing.table.TableColumn;
  *
  * Demonstrates Syllabus Concepts:
  * - Inheritance (extends JFrame)
- * - Interfaces (ActionListener)
+ * - Interfaces (implements ActionListener)
  * - Event Handling and Adapter Classes (MouseAdapter, KeyAdapter)
  * - Layout Managers (BorderLayout, FlowLayout, BoxLayout)
  * - Swing Components (JFrame, JTable, JSplitPane, JToolBar, JPopupMenu, etc.)
- * - Keyboard Shortcuts via InputMap and ActionMap
+ * - Keyboard Shortcuts via KeyAdapter (Adapter Class pattern)
  * - Robust Exception Handling with User Dialogs
+ * - Inner Classes (SidebarItem static inner class)
+ * - Anonymous Classes (ActionListener, ListSelectionListener implementations)
  */
 public class FileExplorerFrame extends JFrame implements ActionListener {
 
@@ -137,6 +136,7 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
 
     /**
      * Constructor initializes managers, layout, components, and event bindings.
+     * Also loads the application icon from resources or the filesystem.
      */
     public FileExplorerFrame() {
         super("Desktop File Explorer");
@@ -145,9 +145,39 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
 
         initializeUI();
         setupKeyboardShortcuts();
+        loadApplicationIcon();
 
         // Initial navigation
         navigateTo(fileManager.getCurrentDirectory());
+    }
+
+    /**
+     * Loads the application icon for the window title bar and taskbar.
+     * Looks for icon.png in the resources/ folder next to the project root.
+     * Demonstrates: Java I/O (ImageIO.read), Exception Handling (try-catch),
+     * and the java.io.File class.
+     */
+    private void loadApplicationIcon() {
+        // Try a few common locations where the icon may be stored
+        String[] iconPaths = {
+            "resources/icon.png",
+            "src/fileexplorer/icon.png",
+            "icon.png"
+        };
+
+        for (String path : iconPaths) {
+            File iconFile = new File(path);
+            if (iconFile.exists()) {
+                try {
+                    // ImageIO.read() reads an image file and returns a BufferedImage
+                    setIconImage(ImageIO.read(iconFile));
+                    return; // Successfully loaded; stop looking
+                } catch (IOException ex) {
+                    // Could not read this file; try the next path
+                }
+            }
+        }
+        // If no icon found, the application uses the default Java Duke icon - that's fine
     }
 
     /**
@@ -895,136 +925,83 @@ public class FileExplorerFrame extends JFrame implements ActionListener {
     }
 
     /**
-     * Registers global keyboard shortcuts for the entire window:
-     * Enter, Backspace, Delete, F2, F5, Ctrl+C, Ctrl+X, Ctrl+V, Ctrl+Shift+N, Ctrl+F, Alt+Enter.
+     * Registers keyboard shortcuts using a simple KeyAdapter on the file table.
+     * This demonstrates Adapter Classes from the college syllabus.
+     *
+     * Shortcuts:
+     *   Enter       - Open selected file or folder
+     *   F2          - Rename selected item
+     *   F5          - Refresh current view
+     *   Delete      - Delete selected item
+     *   Ctrl + C    - Copy selected item
+     *   Ctrl + X    - Cut / Move selected item
+     *   Ctrl + V    - Paste item from clipboard
+     *   Ctrl+Shift+N - Create new folder
+     *   Ctrl + F    - Focus search box
+     *   Alt + Enter - Show properties
+     *   Alt + Left  - Go back in navigation history
+     *   Alt + Right - Go forward in navigation history
+     *   Alt + Up    - Go to parent directory
      */
     private void setupKeyboardShortcuts() {
-        InputMap inputMap = getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
-        ActionMap actionMap = getRootPane().getActionMap();
-
-        // 1. Enter: Open selected item (when table focused)
-        fileTable.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "tableOpen");
-        fileTable.getActionMap().put("tableOpen", new AbstractAction() {
+        // KeyAdapter is a Swing Adapter Class (college syllabus: Section C - Adapter Classes)
+        fileTable.addKeyListener(new KeyAdapter() {
             @Override
-            public void actionPerformed(ActionEvent e) {
-                File selected = getSelectedFile();
-                if (selected != null) {
-                    handleOpen(selected);
-                }
-            }
-        });
+            public void keyPressed(KeyEvent e) {
+                int key = e.getKeyCode();
+                boolean ctrl  = e.isControlDown();
+                boolean alt   = e.isAltDown();
+                boolean shift = e.isShiftDown();
 
-        // 2. F5: Refresh
-        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0), "refreshAction");
-        actionMap.put("refreshAction", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                refreshCurrentView();
-            }
-        });
-
-        // 3. F2: Rename
-        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_F2, 0), "renameAction");
-        actionMap.put("renameAction", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                handleRename();
-            }
-        });
-
-        // 4. Delete: Delete
-        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_DELETE, 0), "deleteAction");
-        actionMap.put("deleteAction", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                handleDelete();
-            }
-        });
-
-        // 5. Ctrl + C: Copy
-        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_C, ActionEvent.CTRL_MASK), "copyAction");
-        actionMap.put("copyAction", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                handleCopy();
-            }
-        });
-
-        // 6. Ctrl + X: Cut
-        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_X, ActionEvent.CTRL_MASK), "cutAction");
-        actionMap.put("cutAction", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                handleCut();
-            }
-        });
-
-        // 7. Ctrl + V: Paste
-        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_V, ActionEvent.CTRL_MASK), "pasteAction");
-        actionMap.put("pasteAction", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                handlePaste(fileManager.getCurrentDirectory());
-            }
-        });
-
-        // 8. Ctrl + Shift + N: New Folder
-        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_N, ActionEvent.CTRL_MASK | ActionEvent.SHIFT_MASK), "newFolderAction");
-        actionMap.put("newFolderAction", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                handleNewFolder();
-            }
-        });
-
-        // 9. Ctrl + F: Focus Search Bar
-        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_F, ActionEvent.CTRL_MASK), "searchFocusAction");
-        actionMap.put("searchFocusAction", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                txtSearch.requestFocusInWindow();
-                txtSearch.selectAll();
-            }
-        });
-
-        // 10. Alt + Enter: Properties
-        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, ActionEvent.ALT_MASK), "propertiesAction");
-        actionMap.put("propertiesAction", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                handleProperties();
-            }
-        });
-
-        // 11. Alt + Left / Backspace: Back in History
-        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT, ActionEvent.ALT_MASK), "backAction");
-        actionMap.put("backAction", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                if (fileManager.goBack()) {
+                if (ctrl && shift && key == KeyEvent.VK_N) {
+                    // Ctrl + Shift + N: New Folder
+                    handleNewFolder();
+                } else if (ctrl && key == KeyEvent.VK_C && !shift) {
+                    // Ctrl + C: Copy
+                    handleCopy();
+                } else if (ctrl && key == KeyEvent.VK_X) {
+                    // Ctrl + X: Cut
+                    handleCut();
+                } else if (ctrl && key == KeyEvent.VK_V) {
+                    // Ctrl + V: Paste
+                    handlePaste(fileManager.getCurrentDirectory());
+                } else if (ctrl && key == KeyEvent.VK_F) {
+                    // Ctrl + F: Focus search
+                    txtSearch.requestFocusInWindow();
+                    txtSearch.selectAll();
+                } else if (alt && key == KeyEvent.VK_ENTER) {
+                    // Alt + Enter: Properties
+                    handleProperties();
+                } else if (alt && key == KeyEvent.VK_LEFT) {
+                    // Alt + Left: Go Back
+                    if (fileManager.goBack()) {
+                        refreshCurrentView();
+                    }
+                } else if (alt && key == KeyEvent.VK_RIGHT) {
+                    // Alt + Right: Go Forward
+                    if (fileManager.goForward()) {
+                        refreshCurrentView();
+                    }
+                } else if (alt && key == KeyEvent.VK_UP) {
+                    // Alt + Up: Go to parent directory
+                    if (fileManager.goUp()) {
+                        refreshCurrentView();
+                    }
+                } else if (key == KeyEvent.VK_ENTER && !ctrl && !alt) {
+                    // Enter: Open selected item
+                    File selected = getSelectedFile();
+                    if (selected != null) {
+                        handleOpen(selected);
+                    }
+                } else if (key == KeyEvent.VK_F2) {
+                    // F2: Rename
+                    handleRename();
+                } else if (key == KeyEvent.VK_F5) {
+                    // F5: Refresh
                     refreshCurrentView();
-                }
-            }
-        });
-
-        // 12. Alt + Right: Forward in History
-        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, ActionEvent.ALT_MASK), "forwardAction");
-        actionMap.put("forwardAction", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                if (fileManager.goForward()) {
-                    refreshCurrentView();
-                }
-            }
-        });
-
-        // 13. Alt + Up: Parent Directory
-        inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_UP, ActionEvent.ALT_MASK), "upAction");
-        actionMap.put("upAction", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                if (fileManager.goUp()) {
-                    refreshCurrentView();
+                } else if (key == KeyEvent.VK_DELETE && !ctrl && !alt) {
+                    // Delete: Delete
+                    handleDelete();
                 }
             }
         });

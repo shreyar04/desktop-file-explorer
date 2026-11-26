@@ -19,3 +19,9 @@ Desktop.ini
 # Temporary logs & test artifacts
 *.log
 test_temp_sandbox/
+
+# Build artifacts (keep source; exclude binaries from version control)
+DesktopFileExplorer.jar
+MANIFEST.MF
+dist/
+installer/

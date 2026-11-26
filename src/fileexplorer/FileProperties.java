@@ -75,7 +75,7 @@ public class FileProperties {
                 this.sizeBytes = targetFile.length();
             }
 
-            this.formattedSize = FileUtils.formatSize(this.sizeBytes) + String.format(" (%,d bytes)", this.sizeBytes);
+            this.formattedSize = FileUtils.formatSize(this.sizeBytes) + " (" + this.sizeBytes + " bytes)";
             this.dateModified = FileUtils.formatDate(targetFile.lastModified());
             this.readable = targetFile.canRead();
             this.writable = targetFile.canWrite();
@@ -148,6 +148,8 @@ public class FileProperties {
         // Body Panel: Form grid layout with properties
         JPanel bodyPanel = new JPanel(new GridBagLayout());
         bodyPanel.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
+        JPanel panel = bodyPanel; // Reference alias so both 'panel' and 'bodyPanel' are in scope
+
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(4, 4, 4, 4);
         gbc.fill = GridBagConstraints.HORIZONTAL;

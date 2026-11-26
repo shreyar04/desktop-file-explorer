@@ -9,8 +9,11 @@
 3. [Project Architecture & Internal Workflow](#3-project-architecture--internal-workflow)
 4. [Class-by-Class Deep Dive & Code Explanations](#4-class-by-class-deep-dive--code-explanations)
 5. [Java Syllabus Concepts Mapped to Source Code](#5-java-syllabus-concepts-mapped-to-source-code)
+   - [5.1 Comprehensive Syllabus Mapping & Code Locations](#51-comprehensive-syllabus-mapping--code-locations)
+   - [5.2 Viva Study Roadmap: Topics Arranged Easiest to Hardest](#52-viva-study-roadmap-topics-arranged-easiest-to-hardest)
+   - [5.3 Syllabus Topics NOT Used in This Project (And Why)](#53-syllabus-topics-not-used-in-this-project-and-why)
 6. [Internal Working of All 10 Features & GUI Systems](#6-internal-working-of-all-10-features--gui-systems)
-7. [75 High-Yield Viva Questions and Detailed Answers](#7-75-high-yield-viva-questions-and-detailed-answers)
+7. [78 High-Yield Viva Questions and Detailed Answers](#7-78-high-yield-viva-questions-and-detailed-answers)
 8. [Project Limitations and Future Scope](#8-project-limitations-and-future-scope)
 
 ---
@@ -20,7 +23,7 @@
 | Category | Details / Implementation in Project |
 |---|---|
 | **Project Name** | Desktop File Explorer |
-| **Technology Stack** | Java Standard Edition (JDK 22.0.1 compatible), Java Swing, Java AWT, Java I/O & NIO |
+| **Technology Stack** | Java Standard Edition (JDK 22.0.1 compatible), Java Swing, Java AWT, Java I/O |
 | **External Libraries** | **Zero** (no Maven, Gradle, Spring, or third-party JARs; runs entirely on vanilla Java SE) |
 | **Design Pattern** | **Model-View-Controller (MVC)** architectural separation |
 | **Package Name** | `fileexplorer` |
@@ -28,10 +31,13 @@
 | **Data Structures Used** | • `ArrayList<File>` (file table list & search results)<br>• `Stack<File>` (back & forward browser history)<br>• `LinkedHashMap<String, File>` (predictable Quick Access sidebar ordering)<br>• Native arrays `File[]` and `byte[]` |
 | **Core GUI Components** | `JFrame`, `JTable`, `JSplitPane`, `JScrollPane`, `JToolBar`, `JPopupMenu`, `JDialog`, `JTextField`, `JButton`, `JLabel`, `JList`, `JComboBox` |
 | **Layout Managers** | `BorderLayout`, `FlowLayout`, `BoxLayout`, `GridBagLayout` |
-| **Event Handling** | • Delegation Event Model<br>• `ActionListener` (buttons & menus)<br>• `MouseAdapter` (double-click table rows & right-click popups)<br>• `KeyAdapter` (Enter in address bar & Esc in search)<br>• `InputMap` & `ActionMap` (global keyboard shortcuts) |
+| **Event Handling** | • Delegation Event Model<br>• `ActionListener` (buttons & menus)<br>• `MouseAdapter` (double-click table rows & right-click popups)<br>• `KeyAdapter` (keyboard shortcuts on table, Enter in address bar & Esc in search) |
 | **I/O & Streams** | `FileInputStream`, `FileOutputStream`, 8 KB byte buffer (`byte[8192]`), `File.renameTo()`, `File.delete()`, `File.listFiles()` |
 | **Recursion Used In** | 1. `FileUtils.copyRecursively()` (deep folder copy)<br>2. `FileUtils.deleteRecursively()` (non-empty folder deletion)<br>3. `FileUtils.calculateTotalSize()` (folder size calculation)<br>4. `FileManager.collectAllFiles()` (recursive search with depth limit) |
-| **Global Shortcuts** | `Ctrl+C` (Copy), `Ctrl+X` (Cut), `Ctrl+V` (Paste), `Ctrl+Shift+N` (New Folder), `F2` (Rename), `Delete` (Delete), `F5` (Refresh), `Alt+Enter` (Properties), `Alt+Left` / `Backspace` (Back), `Alt+Right` (Forward), `Alt+Up` (Up), `Ctrl+F` (Search) |
+| **Global Shortcuts** | `Ctrl+C` (Copy), `Ctrl+X` (Cut), `Ctrl+V` (Paste), `Ctrl+Shift+N` (New Folder), `F2` (Rename), `Delete` (Delete), `F5` (Refresh), `Alt+Enter` (Properties), `Alt+Left` (Back), `Alt+Right` (Forward), `Alt+Up` (Up), `Ctrl+F` (Search) — all via `KeyAdapter` on the file table |
+| **Application Icon** | Stored at `resources/icon.png` and loaded at startup by `FileExplorerFrame.loadApplicationIcon()` using `ImageIO.read()` and `setIconImage()`. |
+| **Runnable JAR** | `DesktopFileExplorer.jar` — run with `java -jar DesktopFileExplorer.jar` (requires JRE on the target machine) |
+| **Portable Executable** | `dist/DesktopFileExplorer/DesktopFileExplorer.exe` — created by `jpackage` (JDK 22 built-in); bundles its own JRE, no Java install needed on target machine |
 
 ---
 
@@ -64,7 +70,7 @@
 > *In addition to standard browsing, renaming, and folder creation, our application handles complex edge cases:*
 > - *Cross-Drive Operations: When moving files across partitions (such as from C: to E:), atomic `File.renameTo()` fails in Windows. Our `FileManager.paste()` detects this and falls back to a recursive copy followed by recursive source deletion.*
 > - *Accidental Recursion Guard: If a user attempts to cut or copy a directory into itself or its own subfolder, our code checks path prefixes and blocks the operation with an error dialog.*
-> - *Context Menus & Shortcuts: We implemented two distinct right-click popup menus—one for table items and one for empty space—along with global window shortcuts like `Ctrl+C`, `Ctrl+V`, `F2`, and `Delete` via Swing's `InputMap` and `ActionMap`.*
+> - *Context Menus & Shortcuts: We implemented two distinct right-click popup menus—one for table items and one for empty space—along with keyboard shortcuts like `Ctrl+C`, `Ctrl+V`, `F2`, and `Delete` via a simple `KeyAdapter` registered on the file table, demonstrating the Adapter Class pattern from the college syllabus.*
 > 
 > *The project was developed strictly using standard Java SE, proving that clean architecture and native APIs can deliver a responsive, production-style desktop app."*
 
@@ -126,7 +132,8 @@
    |--> Instantiates FileManager (defaults to user.home)
    |--> Instantiates FileTableModel
    |--> initializeUI() builds JFrame, SplitPane, Toolbar, Lists, Table
-   |--> setupKeyboardShortcuts() registers InputMap & ActionMap
+   |--> setupKeyboardShortcuts() adds KeyAdapter to fileTable
+   |--> loadApplicationIcon() loads icon.png using ImageIO.read()
    |--> navigateTo(initialDir) executes
         |
 3. navigateTo(File dir) pipeline
@@ -157,9 +164,9 @@
 - **Location:** `src/fileexplorer/Main.java`
 - **Purpose:** Entry point of the entire desktop application.
 - **Key Responsibilities:**
-  1. Displays the startup console banner.
-  2. Sets the Windows Look and Feel so controls render with native system borders, buttons, and colors.
-  3. Uses `SwingUtilities.invokeLater()` to launch the GUI on the Event Dispatch Thread (EDT).
+  1. Displays the startup console banner (`System.out.println`).
+  2. Sets the native Windows Look and Feel (`UIManager.setLookAndFeel()`) so controls render with native system borders, buttons, and colors.
+  3. Uses `SwingUtilities.invokeLater()` with an anonymous `Runnable` class to launch the GUI on the Event Dispatch Thread (EDT) for thread safety.
 
 #### Critical Code Snippet & Line-by-Line Explanation:
 ```java
@@ -169,7 +176,7 @@ public static void main(String[] args) {
     try {
         UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
     } catch (Exception e) {
-        System.err.println("Notice: Using default Swing theme.");
+        System.err.println("Notice: Could not set System Look and Feel. Using default Swing theme.");
     }
 
     SwingUtilities.invokeLater(new Runnable() {
@@ -181,10 +188,13 @@ public static void main(String[] args) {
     });
 }
 ```
-- **Line 2:** Prints the verification message required by the project specification.
+- **Line 2:** Prints the startup verification message required by the project specification.
 - **Line 5:** `UIManager.getSystemLookAndFeelClassName()` asks the operating system (Windows) for its native GUI look-and-feel class string (e.g., `com.sun.java.swing.plaf.windows.WindowsLookAndFeel`).
 - **Line 9:** `SwingUtilities.invokeLater()` places the GUI creation task on the event queue of the Event Dispatch Thread (EDT). This prevents race conditions and ensures thread safety.
-- **Line 10:** An anonymous inner class implementing `Runnable` creates `FileExplorerFrame` and makes it visible.
+- **Line 10:** An anonymous inner class implementing `Runnable` creates `FileExplorerFrame` and makes it visible via `frame.setVisible(true)`.
+- **Line 7:** `UIManager.getSystemLookAndFeelClassName()` asks the operating system (Windows) for its native GUI look-and-feel class string (e.g., `com.sun.java.swing.plaf.windows.WindowsLookAndFeel`).
+- **Line 11:** `SwingUtilities.invokeLater()` places the GUI creation task on the event queue of the Event Dispatch Thread (EDT). This prevents race conditions and ensures thread safety.
+- **Line 12:** An anonymous inner class implementing `Runnable` creates `FileExplorerFrame` and makes it visible.
 
 ---
 
@@ -221,20 +231,38 @@ public void navigateTo(File directory) {
 ```
 - **Explanation:** In the previous buggy version, clicking a sidebar drive loaded files directly without updating `fileManager.currentDirectory`. This centralized `navigateTo()` method now guarantees that `fileManager.navigateTo()` is called first. If valid, `refreshCurrentView()` updates the table, address bar, buttons, and status labels in a synchronized manner.
 
-#### Critical Code Snippet 2: Global Keybinding via InputMap and ActionMap
+#### Critical Code Snippet 2: Global Keyboard Shortcuts via KeyAdapter (Adapter Class Pattern)
 ```java
-InputMap inputMap = getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
-ActionMap actionMap = getRootPane().getActionMap();
-
-inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_C, ActionEvent.CTRL_MASK), "copyAction");
-actionMap.put("copyAction", new AbstractAction() {
+// KeyAdapter is a Swing Adapter Class (college syllabus: Section C - Adapter Classes)
+fileTable.addKeyListener(new KeyAdapter() {
     @Override
-    public void actionPerformed(ActionEvent e) {
-        handleCopy();
+    public void keyPressed(KeyEvent e) {
+        int key = e.getKeyCode();
+        boolean ctrl  = e.isControlDown();
+        boolean alt   = e.isAltDown();
+        boolean shift = e.isShiftDown();
+
+        if (ctrl && key == KeyEvent.VK_C && !shift) {
+            handleCopy();                         // Ctrl+C: Copy
+        } else if (ctrl && key == KeyEvent.VK_X) {
+            handleCut();                          // Ctrl+X: Cut
+        } else if (ctrl && key == KeyEvent.VK_V) {
+            handlePaste(fileManager.getCurrentDirectory()); // Ctrl+V: Paste
+        } else if (key == KeyEvent.VK_DELETE) {
+            handleDelete();                       // Delete key: Delete
+        } else if (key == KeyEvent.VK_F2) {
+            handleRename();                       // F2: Rename
+        } else if (key == KeyEvent.VK_F5) {
+            refreshCurrentView();                 // F5: Refresh
+        } else if (key == KeyEvent.VK_ENTER && !ctrl && !alt) {
+            File selected = getSelectedFile();
+            if (selected != null) handleOpen(selected); // Enter: Open
+        }
+        // ... more shortcuts (Alt+Left, Alt+Right, Alt+Up, Ctrl+F, Ctrl+Shift+N)
     }
 });
 ```
-- **Explanation:** `WHEN_IN_FOCUSED_WINDOW` binds the keystroke globally to the window, regardless of whether a button, list, or table currently holds input focus. This ensures shortcuts like `Ctrl+C` and `Ctrl+V` work reliably across the entire UI.
+- **Explanation:** `KeyAdapter` is an **Adapter Class** — a class that provides empty implementations of all methods in a listener interface so we only override the methods we need. Here, `KeyAdapter` implements `KeyListener` (which has 3 methods: `keyPressed`, `keyTyped`, `keyReleased`), but we only override `keyPressed`. We check modifier keys (`isControlDown()`, `isAltDown()`) combined with the key code to handle each shortcut. This is simpler and more viva-friendly than the `InputMap`/`ActionMap` pattern.
 
 ---
 
@@ -409,66 +437,130 @@ public static boolean deleteRecursively(File fileOrDir) {
 
 ## 5. Java Syllabus Concepts Mapped to Source Code
 
-### Section A: Core Java & OOP Concepts
-1. **Classes and Objects:**
-   - Every file defines a blueprint. Instantiated via `new FileExplorerFrame()`, `new FileManager()`, and `new FileProperties()`.
-2. **Constructors & Constructor Overloading:**
-   - `FileTableModel()` (default empty constructor) and `FileTableModel(List<File> files)` (parameterized constructor).
-3. **Encapsulation:**
-   - All state fields in `FileManager` (`currentDirectory`, `clipboardFile`, `backHistory`) and `FileProperties` are marked `private` and accessed via public getters (`getCurrentDirectory()`, `canPaste()`).
-4. **Method Overloading (Compile-Time Polymorphism):**
-   - `FileUtils.formatSize(long bytes)` vs `FileUtils.formatSize(File file)`.
-   - `FileUtils.formatDate(long millis)` vs `FileUtils.formatDate(File file)`.
-   - `FileManager.search(String query)` vs `FileManager.search(File startDir, String query, boolean recursive)`.
-5. **Inheritance:**
-   - `FileExplorerFrame extends JFrame`: inherits window features.
-   - `FileTableModel extends AbstractTableModel`: inherits table event listener dispatchers.
-6. **Interfaces:**
-   - `ActionListener`: implemented by `FileExplorerFrame`.
-   - `Comparator<File>`: implemented anonymously in `FileTableModel.sort()`.
-   - `ListSelectionListener`: used for sidebar and table row selection.
-7. **Abstract Classes:**
-   - `AbstractTableModel`: provides default event listener management while requiring us to implement `getRowCount()`, `getColumnCount()`, and `getValueAt()`.
-8. **Inner & Anonymous Classes:**
-   - `SidebarItem`: static nested helper class inside `FileExplorerFrame`.
-   - Anonymous classes used for `new Runnable()`, `new MouseAdapter()`, and button action listeners.
-9. **String Handling:**
-   - `substring()`, `lastIndexOf()`, `toLowerCase()`, `indexOf()`, `trim()`, and `String.format()`.
-10. **Wrapper Classes:**
-    - `Long.compare()`, `Integer`, and `Boolean` conversions.
+This section provides an exhaustive, line-level mapping of all concepts from your college Java syllabus to the actual source code of the project.
 
 ---
 
-### Section B: Collections, Streams & Error Handling
-1. **Collections Framework:**
-   - `List` / `ArrayList`: dynamically resized storage for table rows and search results.
-   - `Stack`: LIFO (Last-In-First-Out) data structure used for `backHistory` and `forwardHistory`.
-   - `Map` / `LinkedHashMap`: key-value mapping for Quick Access paths with insertion-order preservation.
-2. **Iterators:**
-   - Explicit `Iterator<File> iterator = allItems.iterator()` in `FileManager.search()`.
-3. **Utility Classes:**
-   - `Collections.sort()` for sorting lists; `Arrays.asList()` for array conversion.
-4. **Exception Handling:**
-   - `try-catch-finally` and try-with-resources.
-   - Throws descriptive `java.io.IOException` instances on illegal names or failed operations.
-   - Catches `SecurityException` when attempting to list restricted system folders.
-5. **Byte Streams & I/O:**
-   - `FileInputStream` and `FileOutputStream` with `byte[] buffer = new byte[8192]`.
+### 5.1 Comprehensive Syllabus Mapping & Code Locations
+
+The table below maps every Java syllabus concept directly to the class, method, and exact implementation in this project:
+
+| Syllabus Category | Java Concept | Project Class | Method / Location | Exact Code / Implementation Details |
+|---|---|---|---|---|
+| **Section A: Fundamentals & OOP** | **Program Structure & `main()`** | `Main.java` | `public static void main(String[] args)` | Application entry point that executes on program start and launches the GUI. |
+| | **Data Types, Variables & Operators** | All classes | Throughout the project | Primitive types (`int`, `long`, `boolean`, `char`, `double`), arithmetic operators (`+`, `-`, `*`, `/`), logical operators (`&&`, `\|\|`, `!`), and comparison operators (`==`, `!=`, `<`, `>`). |
+| | **Classes and Objects** | All classes | Throughout the project | 6 blueprint classes (`Main`, `FileExplorerFrame`, `FileManager`, `FileTableModel`, `FileProperties`, `FileUtils`) instantiated with `new`. |
+| | **Constructors** | `FileManager.java`, `FileTableModel.java`, `FileProperties.java`, `FileExplorerFrame.java` | Class constructors | `public FileManager()`, `public FileTableModel()`, `public FileProperties(File targetFile)`, `public FileExplorerFrame()`. |
+| | **Encapsulation & Access Modifiers** | `FileManager.java`, `FileProperties.java` | Private fields with public getters | Private fields (`currentDirectory`, `clipboardFile`, `backHistory`) protected from external corruption; exposed via `getCurrentDirectory()`, `canPaste()`, `getName()`. |
+| | **Method Overloading (Static Polymorphism)** | `FileUtils.java` | `formatSize()`, `formatDate()` | `formatSize(long bytes)` vs `formatSize(File file)`<br>`formatDate(long millis)` vs `formatDate(File file)` |
+| | **Method Overloading** | `FileManager.java` | `search()` | `search(String query)` vs `search(File startDir, String query, boolean recursive)` |
+| | **Arrays** | `FileTableModel.java`, `FileUtils.java` | Column definitions, buffers | `String[] COLUMN_NAMES`, `File[] listFiles()`, `byte[] buffer = new byte[8192]`, `int[] countItems()`. |
+| | **String Handling** | `FileUtils.java`, `FileManager.java` | Path manipulation & validation | `name.substring()`, `lastIndexOf('.')`, `toLowerCase()`, `trim()`, `contains()`, `indexOf()`, `String.format("%.2f MB", mb)`. |
+| | **Wrapper Classes** | `FileTableModel.java`, `FileUtils.java` | Sorting & conversions | `Long.compare(size1, size2)`, `Long.compare(f1.lastModified(), f2.lastModified())`, `Integer`, `Boolean`. |
+| | **Inheritance (`extends`)** | `FileExplorerFrame.java`, `FileTableModel.java` | Class declarations | `FileExplorerFrame extends JFrame`<br>`FileTableModel extends AbstractTableModel` |
+| | **Interfaces (`implements`)** | `FileExplorerFrame.java`, `FileTableModel.java` | Event & comparison contracts | `implements ActionListener` in `FileExplorerFrame`<br>`implements Comparator<File>` in `FileTableModel.sort()`<br>`implements ListSelectionListener` in sidebar/table listeners. |
+| | **Abstract Classes** | `FileTableModel.java` | Extends `AbstractTableModel` | Implements required abstract methods: `getRowCount()`, `getColumnCount()`, `getValueAt(row, col)`. |
+| | **Inner Classes (Static Nested)** | `FileExplorerFrame.java` | `private static class SidebarItem` | Encapsulates sidebar row data (`displayName`, `targetFolder`, `icon`) locally within the frame class. |
+| | **Anonymous Inner Classes** | `Main.java`, `FileExplorerFrame.java`, `FileTableModel.java` | Callbacks & Listeners | `new Runnable() { run() }`<br>`new ActionListener() { actionPerformed() }`<br>`new MouseAdapter() { mouseClicked() }`<br>`new KeyAdapter() { keyPressed() }`<br>`new Comparator<File>() { compare() }` |
+| | **Packages & Access Specifiers** | All classes | Top of each file | `package fileexplorer;`<br>Uses `public`, `private`, `protected`, and package-private access appropriately. |
+| **Section B: Collections, Streams & I/O** | **Exception Handling (`try-catch-finally`)** | `Main.java`, `FileExplorerFrame.java`, `FileUtils.java` | Guarding risky calls | Catches `Exception` on Look & Feel, `IOException` on file operations, handles user error dialogs. |
+| | **Try-with-Resources** | `FileUtils.java` | `copyRecursively()` | Auto-closes streams: `try (FileInputStream inStream = ...; FileOutputStream outStream = ...)`. |
+| | **Throwing Exceptions (`throws`, `throw`)** | `FileManager.java`, `FileUtils.java` | Validation & I/O failures | Methods declare `throws IOException`; invalid names trigger `throw new IOException(...)`. |
+| | **Handling SecurityException** | `FileManager.java` | `getFiles()`, `collectAllFiles()` | Traps `SecurityException` when attempting to list restricted/system folders without crashing. |
+| | **Byte Streams (`FileInputStream` / `FileOutputStream`)** | `FileUtils.java` | `copyRecursively()` | Reads and writes raw binary file data using an 8 KB byte buffer (`byte[8192]`). |
+| | **File Handling (`java.io.File`)** | All classes | File metadata and operations | `exists()`, `isDirectory()`, `length()`, `lastModified()`, `getName()`, `getAbsolutePath()`, `mkdir()`, `renameTo()`, `delete()`, `listFiles()`, `listRoots()`. |
+| | **Desktop API (`java.awt.Desktop`)** | `FileManager.java` | `open(File file)` | Launches files using the native operating system default program: `Desktop.getDesktop().open(file)`. |
+| | **Collections: `List` / `ArrayList`** | `FileManager.java`, `FileTableModel.java` | Table rows & search results | Dynamic, index-accessible list of files: `List<File> fileList = new ArrayList<>()`. |
+| | **Collections: `Stack` (LIFO)** | `FileManager.java` | `backHistory`, `forwardHistory` | Implements browser-style back and forward directory navigation: `stack.push()`, `stack.pop()`, `stack.isEmpty()`. |
+| | **Collections: `Map` / `LinkedHashMap`** | `FileManager.java` | `getQuickAccessLocations()` | Key-value mapping of folder names to `File` objects with insertion-order preservation: `locations.put("Desktop", desktop)`. |
+| | **Iterators (`Iterator<File>`)** | `FileManager.java` | `search()` | Iterates through search items sequentially using `iterator.hasNext()` and `iterator.next()`. |
+| | **Utility Classes (`Collections`, `Arrays`)** | `FileManager.java`, `FileTableModel.java` | Sorting and conversion | `Collections.sort(fileList, comparator)`, `Arrays.asList(list)`. |
+| | **Enums (`enum`)** | `FileManager.java` | `public enum ClipboardMode` | Strongly typed clipboard states: `ClipboardMode.COPY` and `ClipboardMode.CUT`. |
+| | **Recursion** | `FileUtils.java`, `FileManager.java` | Directory tree processing | 1. `copyRecursively()` — deep folder copy<br>2. `deleteRecursively()` — deep folder deletion<br>3. `calculateTotalSize()` — folder tree size calculation<br>4. `collectAllFiles()` — depth-limited subfolder search. |
+| **Section C: GUI, Layouts & Events** | **Swing Components** | `FileExplorerFrame.java`, `FileProperties.java` | User interface elements | `JFrame`, `JTable`, `JSplitPane`, `JScrollPane`, `JToolBar`, `JPopupMenu`, `JMenuItem`, `JDialog`, `JTextField`, `JButton`, `JLabel`, `JList`, `JComboBox`, `JSeparator`. |
+| | **Layout Managers** | `FileExplorerFrame.java`, `FileProperties.java` | Component positioning | `BorderLayout` (North, Center, South)<br>`BoxLayout` (vertical stacking in toolbar & sidebar)<br>`FlowLayout` (horizontal button bars)<br>`GridBagLayout` (flexible 2-column form in Properties dialog). |
+| | **Delegation Event Model** | `FileExplorerFrame.java` | Button and menu clicks | Event Source (`JButton`) delegates event to registered Event Listener (`ActionListener`). |
+| | **Adapter Classes** | `FileExplorerFrame.java` | Mouse and keyboard events | `MouseAdapter` for table double-clicks and context menus.<br>`KeyAdapter` for keyboard shortcuts (`Enter`, `F2`, `F5`, `Delete`, `Ctrl+C`, `Ctrl+V`, etc.). |
+| | **Table Models & Cell Renderers** | `FileTableModel.java`, `FileExplorerFrame.java` | JTable presentation | `AbstractTableModel` provides tabular data.<br>`DefaultTableCellRenderer` renders native Windows system icons next to file names. |
+| | **Thread Safety & EDT** | `Main.java` | GUI launch | `SwingUtilities.invokeLater(new Runnable() {...})` schedules window creation on the Swing Event Dispatch Thread. |
 
 ---
 
-### Section C: GUI, Layouts & Event Handling
-1. **Swing vs AWT:**
-   - Heavyweight AWT components rely on OS peers; lightweight Swing components are written in pure Java and support pluggable themes.
-2. **Layout Managers:**
-   - `BorderLayout`: Main frame division (North, Center, South).
-   - `BoxLayout`: Vertical arrangement of navigation bars and sidebar sections.
-   - `FlowLayout`: Horizontal grouping of navigation buttons and search controls.
-   - `GridBagLayout`: Flexible grid of label-value pairs in the Properties dialog.
-3. **Delegation Event Model:**
-   - Event Source (e.g., `JButton`) $\rightarrow$ Event Object (`ActionEvent`) $\rightarrow$ Event Listener (`ActionListener`).
-4. **Adapter Classes:**
-   - `MouseAdapter` and `KeyAdapter` allow overriding only the required methods (`mouseClicked`, `keyPressed`) without cluttering code with unused interface methods.
+### 5.2 Viva Study Roadmap: Topics Arranged Easiest to Hardest
+
+When preparing for your viva examination, study the topics in this exact order. Build your confidence with foundational concepts first before moving to event-driven GUI architecture.
+
+```
++-------------------------------------------------------------------------------+
+|  Level 1: Fundamentals (Data Types, Variables, If-Else, Loops, Arrays)       |
+|                                     v                                         |
+|  Level 2: Basic OOP (Classes, Objects, Constructors, Encapsulation)          |
+|                                     v                                         |
+|  Level 3: Core Java Mechanisms (Inheritance, Interfaces, Strings, Wrappers)  |
+|                                     v                                         |
+|  Level 4: Error Handling & File I/O (Exceptions, File, Streams, Buffers)      |
+|                                     v                                         |
+|  Level 5: Data Structures & Algorithms (ArrayList, Stack, Map, Recursion)    |
+|                                     v                                         |
+|  Level 6: Swing GUI & Event Architecture (EDT, Layouts, Models, Adapters)    |
++-------------------------------------------------------------------------------+
+```
+
+#### Level 1: Absolute Basics (Easiest — Quick Wins)
+- **Data Types & Variables:** Difference between primitives (`int`, `long`, `boolean`) and reference types (`String`, `File`).
+- **Control Flow:** `if-else` decision making, `switch-case` (used for column indices in `getValueAt`), and `for` / `while` loops.
+- **Arrays:** Fixed-size memory storage; `String[] COLUMN_NAMES` and `byte[] buffer = new byte[8192]`.
+- *Sample Viva Question:* "Why did you use `long` instead of `int` for file sizes?" $\rightarrow$ Answer: A standard 32-bit `int` tops out at 2.14 GB ($2^{31}-1$ bytes). Modern storage drives and files can be hundreds of gigabytes, so 64-bit `long` is required.
+
+#### Level 2: Elementary OOP Concepts
+- **Classes vs Objects:** A class is a blueprint; an object is an active instance with memory allocated via `new`.
+- **Constructors:** Special methods with no return type that run when `new` is called to initialize fields.
+- **Encapsulation:** Keeping fields `private` and exposing them via `public` getters/setters to protect object integrity.
+- *Sample Viva Question:* "Why are `currentDirectory` and `backHistory` private in `FileManager`?" $\rightarrow$ Answer: To prevent external code from mutating the file manager's state directly without triggering necessary history updates and validation.
+
+#### Level 3: Intermediate Java OOP
+- **Method Overloading:** Same method name, different parameter signatures in the same class (compile-time polymorphism). Example: `formatSize(long)` vs `formatSize(File)`.
+- **Inheritance (`extends`):** Code reuse and subtyping. `FileExplorerFrame extends JFrame`, inheriting standard window functionality.
+- **Interfaces (`implements`):** Pure contracts defining method signatures. `ActionListener` guarantees an `actionPerformed()` method.
+- **Packages & Access Modifiers:** `public`, `private`, `protected`, and default package-private visibility.
+- **String Handling & Wrapper Classes:** Immutability of `String`, substring operations, and static wrapper helpers like `Long.compare()`.
+
+#### Level 4: Error Handling & File I/O
+- **Exception Handling:** `try`, `catch`, `finally`, `throw`, and `throws`. Checked exceptions (`IOException`) vs unchecked exceptions (`NullPointerException`, `SecurityException`).
+- **Try-with-Resources:** Introduced in Java 7; automatically closes resources that implement `AutoCloseable` (e.g., `FileInputStream`, `FileOutputStream`).
+- **`java.io.File` Operations:** Does NOT hold file contents; it represents a path on the file system. Methods: `exists()`, `isFile()`, `isDirectory()`, `length()`, `listFiles()`, `delete()`, `renameTo()`.
+- **Byte Streams:** Reading and writing binary data in chunks using a byte array buffer (`byte[8192]`) rather than reading one byte at a time.
+
+#### Level 5: Collections, Iterators & Recursion
+- **Collections Framework:** `List` / `ArrayList` (ordered, resizable, index-based) vs native arrays.
+- **`Stack<File>`:** LIFO (Last-In-First-Out) structure. Why is it ideal for Back/Forward navigation? (Push on navigate, pop on back).
+- **`Map` / `LinkedHashMap`:** Key-value pairs. Why `LinkedHashMap` for Quick Access? (Maintains predictable insertion order so "Home", "Desktop", "Documents" appear in sequence).
+- **`Iterator<File>`:** Standard cursor for traversing collections safely without exposing internal structure.
+- **Recursion:** A method calling itself with a base condition. Understand both `copyRecursively()` and `deleteRecursively()`.
+
+#### Level 6: Swing GUI & Event Architecture (Hardest — High Value in Viva)
+- **AWT vs Swing:** AWT is heavyweight (relies on native OS peers); Swing is lightweight (drawn in pure Java, platform-independent, pluggable themes).
+- **Event Dispatch Thread (EDT):** Why use `SwingUtilities.invokeLater()`? (Swing is single-threaded; all UI component updates must occur on the EDT to prevent GUI deadlocks and race conditions).
+- **Delegation Event Model:** The separation between Event Source (`JButton`), Event Object (`ActionEvent`), and Event Listener (`ActionListener`).
+- **Adapter Classes (`MouseAdapter`, `KeyAdapter`):** Default empty implementations of multi-method listener interfaces; allows overriding only the methods you actually need.
+- **MVC & `AbstractTableModel`:** How `JTable` decouples presentation from data using our custom `FileTableModel`.
+
+---
+
+### 5.3 Syllabus Topics NOT Used in This Project (And Why)
+
+If your teacher or external examiner asks why certain topics from the university syllabus are missing, give these clear, technically sound justifications:
+
+| Syllabus Concept | Not Used? | Technical Justification for Viva |
+|---|---|---|
+| **JDBC / Relational Databases** | ❌ Not Used | **Justification:** A File Explorer manages files, folders, and directories directly on the operating system's local hard drive using `java.io.File` and file streams. Storing file paths in an SQL database like MySQL or Oracle would be redundant, introduce external database server dependencies, and contradict the goal of a standalone, offline utility. |
+| **Java Servlets & JSP** | ❌ Not Used | **Justification:** Servlets and JSP are server-side web technologies executed inside a web container (e.g., Apache Tomcat) to serve HTML pages over HTTP. This project is explicitly specified as a native standalone desktop application built with Java Swing and AWT. |
+| **Socket Programming / Networking** | ❌ Not Used | **Justification:** Sockets (`Socket`, `ServerSocket`) are designed for inter-process communication over TCP/IP networks. The Desktop File Explorer is designed as a 100% offline local utility. Introducing network sockets was not required and would introduce security vulnerabilities and port binding issues. |
+| **Custom Multithreading (`Thread`, `Runnable` subclasses, `synchronized`)** | ❌ Not Used | **Justification:** To keep the project clean, reliable, and strictly beginner-friendly, all operations run on the standard Swing Event Dispatch Thread (EDT) with safe scheduling via `SwingUtilities.invokeLater()`. Introducing custom background threads, thread locks, and synchronization blocks would make the code significantly harder to trace and defend in a viva. *(Can mention as Future Scope with `SwingWorker`).* |
+| **Custom Generic Classes (`class Box<T>`)** | ❌ Not Used | **Justification:** We actively utilize Java Generics by consuming built-in collections (`List<File>`, `Stack<File>`, `Map<String, File>`, `Comparator<File>`), ensuring full type safety at compile time. However, creating a custom generic container class from scratch was unnecessary since Java's standard Collections library already provides battle-tested generic structures. |
+| **Java RMI (Remote Method Invocation)** | ❌ Not Used | **Justification:** RMI enables distributed objects across different Java Virtual Machines over a network. Our file explorer is a single-node desktop application managing local disks. |
+| **Java Reflection API (`Class.forName()`, `getMethod()`)** | ❌ Not Used | **Justification:** Reflection inspects or modifies runtime behavior dynamically. It degrades execution performance, bypasses compile-time type safety, and is unnecessary for a structured desktop GUI application where all types are known statically. |
+| **Complex Streams API & Functional Pipelines (`.stream().filter().map()`)** | ❌ Not Used | **Justification:** While Java 8+ Stream pipelines are powerful, university syllabi prioritize core object-oriented loops, arrays, and standard `Iterator<File>` patterns. Standard loops and iterators were chosen deliberately because they are simple to step through, debug, and explain to viva examiners line by line. |
 
 ---
 
@@ -526,11 +618,11 @@ public static boolean deleteRecursively(File fileOrDir) {
 
 ### Context Menus & Keyboard Shortcuts
 - Two `JPopupMenu` instances are registered: one on the table rows and one on empty background space.
-- Global key bindings registered via `InputMap` and `ActionMap` on `getRootPane()` ensure shortcuts work regardless of which component currently holds focus.
+- Global keyboard shortcuts are handled by a `KeyAdapter` registered on `fileTable`. It checks `e.getKeyCode()` combined with modifier flags (`isControlDown()`, `isAltDown()`, `isShiftDown()`) to trigger the correct action.
 
 ---
 
-## 7. 75 High-Yield Viva Questions and Detailed Answers
+## 7. 78 High-Yield Viva Questions and Detailed Answers
 
 ### Category 1: Project Overview & Architecture
 #### Q1. What is the title and primary objective of this project?
@@ -830,16 +922,23 @@ This fetches the authentic Windows shell icon used in the operating system.
 **Answer:** A convenience class that implements a listener interface with default empty methods. Instead of implementing all 5 methods of `MouseListener`, we extend `MouseAdapter` and override only `mouseClicked()` and `mousePressed()`.
 
 #### Q64. How did you implement global keyboard shortcuts?
-**Answer:** Using Swing's `InputMap` and `ActionMap` on `getRootPane()`:
+**Answer:** We use a `KeyAdapter` registered on the file table. `KeyAdapter` is an Adapter Class from the Swing package — it implements `KeyListener` with empty methods, so we only override `keyPressed()`. Inside `keyPressed()`, we check `e.getKeyCode()` and modifier flags (`isControlDown()`, `isAltDown()`, `isShiftDown()`) to decide which action to execute:
 ```java
-InputMap inputMap = getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
-inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0), "refreshAction");
-actionMap.put("refreshAction", new AbstractAction() { ... });
+fileTable.addKeyListener(new KeyAdapter() {
+    @Override
+    public void keyPressed(KeyEvent e) {
+        int key = e.getKeyCode();
+        if (e.isControlDown() && key == KeyEvent.VK_C) handleCopy();
+        else if (key == KeyEvent.VK_DELETE)             handleDelete();
+        else if (key == KeyEvent.VK_F5)                 refreshCurrentView();
+        else if (key == KeyEvent.VK_F2)                 handleRename();
+        // ...etc
+    }
+});
 ```
-This guarantees shortcuts like `F5`, `Ctrl+C`, and `Delete` trigger regardless of which component has focus.
 
-#### Q65. Why did you use `InputMap`/`ActionMap` instead of `KeyListener`?
-**Answer:** `KeyListener` only fires when the specific component it is attached to currently has keyboard focus. If focus shifts to a button or list, `KeyListener` stops responding. `InputMap` with `WHEN_IN_FOCUSED_WINDOW` listens globally across the entire window.
+#### Q65. Why did you use `KeyAdapter` instead of `InputMap`/`ActionMap`?
+**Answer:** `KeyAdapter` is simpler, easier to understand, and directly maps to the **Adapter Class** concept in the college syllabus (Section C). It lets us handle all shortcuts in one clear `if-else` chain that is easy to explain in a viva. The `InputMap`/`ActionMap` pattern is a more advanced Swing approach that maps string keys to `AbstractAction` objects — it is powerful but adds complexity that isn't needed here. Since all our shortcuts are table-centric, a `KeyAdapter` on the table works perfectly well.
 
 #### Q66. How does right-click popup menu triggering work across operating systems?
 **Answer:** Different operating systems trigger popups on different mouse events (Windows on `mouseReleased`, Unix on `mousePressed`). To be cross-platform, we check `e.isPopupTrigger()` inside both `mousePressed()` and `mouseReleased()` methods of `MouseAdapter`.
@@ -875,6 +974,38 @@ This guarantees shortcuts like `F5`, `Ctrl+C`, and `Delete` trigger regardless o
 
 #### Q75. If you had an extra week, what feature would you add next?
 **Answer:** Asynchronous background file copying with a visual `JProgressBar` using Swing's `SwingWorker`, so copying huge multi-gigabyte files doesn't temporarily block the main window thread.
+
+#### Q76. How is the custom application icon loaded and set in the GUI?
+**Answer:** The project stores `icon.png` in the `resources/` directory. During GUI initialization, `FileExplorerFrame` calls its private helper method `loadApplicationIcon()`. It uses Java's `ImageIO.read()` to parse the image file into a `BufferedImage` and assigns it to the window via `setIconImage()`:
+
+```java
+File iconFile = new File("resources/icon.png");
+if (iconFile.exists()) {
+    try {
+        setIconImage(ImageIO.read(iconFile));
+    } catch (IOException ex) {
+        // Fall back gracefully if image cannot be read
+    }
+}
+```
+This demonstrates file existence checking (`iconFile.exists()`), Java Image I/O (`ImageIO.read`), exception handling (`try-catch`), and the `JFrame.setIconImage()` method.
+
+#### Q77. How do you run the application without an IDE or JDK installed?
+**Answer:** We used `jpackage` (included in JDK 14+) to create a **portable application image** in the `dist/` folder. It bundles the compiled app JAR together with its own JRE (Java Runtime), so the user just double-clicks `dist/DesktopFileExplorer/DesktopFileExplorer.exe` — no Java install required on their machine.
+
+Command used:
+```powershell
+jpackage --input . --name "DesktopFileExplorer" --main-jar DesktopFileExplorer.jar --main-class fileexplorer.Main --type app-image --dest dist --app-version 1.0 --icon resources\icon.png
+```
+
+#### Q78. What is the difference between a runnable JAR and the jpackage executable?
+
+| | **Runnable JAR** | **jpackage exe** |
+|---|---|---|
+| Requires Java installed | ✅ Yes | ❌ No (JRE is bundled) |
+| File size | Small (~60 KB) | Large (~60–200 MB with JRE) |
+| Run command | `java -jar DesktopFileExplorer.jar` | Double-click `.exe` |
+| Cross-platform | ✅ Yes | ❌ Platform-specific |
 
 ---
 
